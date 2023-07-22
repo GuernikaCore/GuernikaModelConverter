@@ -932,19 +932,19 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
         encoder_hidden_states,
         text_embeds=None,
         time_ids=None,
-        down_block_additional_residuals_00=None,
-        down_block_additional_residuals_01=None,
-        down_block_additional_residuals_02=None,
-        down_block_additional_residuals_03=None,
-        down_block_additional_residuals_04=None,
-        down_block_additional_residuals_05=None,
-        down_block_additional_residuals_06=None,
-        down_block_additional_residuals_07=None,
-        down_block_additional_residuals_08=None,
-        down_block_additional_residuals_09=None,
-        down_block_additional_residuals_10=None,
-        down_block_additional_residuals_11=None,
-        mid_block_additional_residual=None,
+        down_block_res_samples_00=None,
+        down_block_res_samples_01=None,
+        down_block_res_samples_02=None,
+        down_block_res_samples_03=None,
+        down_block_res_samples_04=None,
+        down_block_res_samples_05=None,
+        down_block_res_samples_06=None,
+        down_block_res_samples_07=None,
+        down_block_res_samples_08=None,
+        down_block_res_samples_09=None,
+        down_block_res_samples_10=None,
+        down_block_res_samples_11=None,
+        mid_block_res_sample=None,
     ):
         # 0. Project (or look-up) time embeddings
         t_emb = self.time_proj(timestep)
@@ -980,20 +980,20 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
 
             down_block_res_samples += res_samples
         
-        if down_block_additional_residuals_00 is not None:
+        if down_block_res_samples_00 is not None:
             down_block_additional_residuals = [
-                down_block_additional_residuals_00,
-                down_block_additional_residuals_01,
-                down_block_additional_residuals_02,
-                down_block_additional_residuals_03,
-                down_block_additional_residuals_04,
-                down_block_additional_residuals_05,
-                down_block_additional_residuals_06,
-                down_block_additional_residuals_07,
-                down_block_additional_residuals_08,
-                down_block_additional_residuals_09,
-                down_block_additional_residuals_10,
-                down_block_additional_residuals_11,
+                down_block_res_samples_00,
+                down_block_res_samples_01,
+                down_block_res_samples_02,
+                down_block_res_samples_03,
+                down_block_res_samples_04,
+                down_block_res_samples_05,
+                down_block_res_samples_06,
+                down_block_res_samples_07,
+                down_block_res_samples_08,
+                down_block_res_samples_09,
+                down_block_res_samples_10,
+                down_block_res_samples_11,
             ]
             new_down_block_res_samples = ()
 
@@ -1012,8 +1012,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
             encoder_hidden_states=encoder_hidden_states
         )
         
-        if mid_block_additional_residual is not None:
-            sample += mid_block_additional_residual
+        if mid_block_res_sample is not None:
+            sample += mid_block_res_sample
 
         # 5. up
         for upsample_block in self.up_blocks:

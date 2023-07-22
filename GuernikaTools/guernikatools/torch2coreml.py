@@ -1029,21 +1029,40 @@ def convert_unet(pipe, args):
             ]
         
         if args.controlnet_support:
+            block_out_channels = pipe.unet.config.block_out_channels
+                                    
+            cn_output = 0
+            cn_height = height
+            cn_width = width
+            
+            # down
+            output_channel = block_out_channels[0]
             sample_unet_inputs = sample_unet_inputs + [
-                ("down_block_res_samples_00", torch.rand(2,  320, height, width)),
-                ("down_block_res_samples_01", torch.rand(2,  320, height, width)),
-                ("down_block_res_samples_02", torch.rand(2,  320, height, width)),
-                ("down_block_res_samples_03", torch.rand(2,  320, int(height / 2), int(width / 2))),
-                ("down_block_res_samples_04", torch.rand(2,  640, int(height / 2), int(width / 2))),
-                ("down_block_res_samples_05", torch.rand(2,  640, int(height / 2), int(width / 2))),
-                ("down_block_res_samples_06", torch.rand(2,  640, int(height / 4), int(width / 4))),
-                ("down_block_res_samples_07", torch.rand(2, 1280, int(height / 4), int(width / 4))),
-                ("down_block_res_samples_08", torch.rand(2, 1280, int(height / 4), int(width / 4))),
-                ("down_block_res_samples_09", torch.rand(2, 1280, int(height / 8), int(width / 8))),
-                ("down_block_res_samples_10", torch.rand(2, 1280, int(height / 8), int(width / 8))),
-                ("down_block_res_samples_11", torch.rand(2, 1280, int(height / 8), int(width / 8))),
-                ("mid_block_res_sample",      torch.rand(2, 1280, int(height / 8), int(width / 8)))
+                (f"down_block_res_samples_{cn_output:02}", torch.rand(2, output_channel, cn_height, cn_width))
             ]
+            cn_output += 1
+            
+            for i, output_channel in enumerate(block_out_channels):
+                is_final_block = i == len(block_out_channels) - 1
+                sample_unet_inputs = sample_unet_inputs + [
+                    (f"down_block_res_samples_{cn_output:02}", torch.rand(2,  output_channel, cn_height, cn_width)),
+                    (f"down_block_res_samples_{cn_output+1:02}", torch.rand(2,  output_channel, cn_height, cn_width)),
+                ]
+                cn_output += 2
+                if not is_final_block:
+                    cn_height = int(cn_height / 2)
+                    cn_width = int(cn_width / 2)
+                    sample_unet_inputs = sample_unet_inputs + [
+                        (f"down_block_res_samples_{cn_output:02}", torch.rand(2,  output_channel, cn_height, cn_width)),
+                    ]
+                    cn_output += 1
+            
+            # mid
+            output_channel = block_out_channels[-1]
+            sample_unet_inputs = sample_unet_inputs + [
+                ("mid_block_res_sample", torch.rand(2, output_channel, cn_height, cn_width))
+            ]
+            
         
         sample_unet_inputs = OrderedDict(sample_unet_inputs)
         sample_unet_inputs_spec = {
@@ -1069,7 +1088,7 @@ def convert_unet(pipe, args):
         
         # JIT trace
         logger.info("JIT tracing..")
-        reference_unet = torch.jit.trace(reference_unet, list(sample_unet_inputs.values()))
+        reference_unet = torch.jit.trace(reference_unet, example_kwarg_inputs=sample_unet_inputs)
         logger.info("Done.")
 
         if args.check_output_correctness:
@@ -1120,28 +1139,6 @@ def convert_unet(pipe, args):
                 ""
         if args.controlnet_support:
             coreml_unet.input_description["down_block_res_samples_00"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_01"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_02"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_03"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_04"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_05"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_06"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_07"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_08"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_09"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_10"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["down_block_res_samples_11"] = \
                 "Optional: Residual down sample from ControlNet"
             coreml_unet.input_description["mid_block_res_sample"] = \
                 "Optional: Residual mid sample from ControlNet"
