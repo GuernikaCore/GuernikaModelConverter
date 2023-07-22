@@ -7,13 +7,30 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E80728E229D6336D0045ECAC /* ConvertControlNetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E80728E129D6336D0045ECAC /* ConvertControlNetViewModel.swift */; };
+		E80728E429D633730045ECAC /* ConvertControlNetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E80728E329D633730045ECAC /* ConvertControlNetView.swift */; };
+		E82729AA29D6E29D0029C1A9 /* Version.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82729A929D6E29D0029C1A9 /* Version.swift */; };
+		E82729AD29D70C220029C1A9 /* DestinationToolbarButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82729AC29D70C220029C1A9 /* DestinationToolbarButton.swift */; };
 		E82F887D29C7643200A36A05 /* GuernikaModelConverterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82F887C29C7643200A36A05 /* GuernikaModelConverterApp.swift */; };
-		E82F887F29C7643200A36A05 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82F887E29C7643200A36A05 /* ContentView.swift */; };
 		E82F888129C7643300A36A05 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E82F888029C7643300A36A05 /* Assets.xcassets */; };
 		E82F888429C7643300A36A05 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E82F888329C7643300A36A05 /* Preview Assets.xcassets */; };
 		E82F888F29C7643300A36A05 /* GuernikaModelConverterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82F888E29C7643300A36A05 /* GuernikaModelConverterTests.swift */; };
 		E82F889929C7643300A36A05 /* GuernikaModelConverterUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82F889829C7643300A36A05 /* GuernikaModelConverterUITests.swift */; };
 		E82F889B29C7643300A36A05 /* GuernikaModelConverterUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82F889A29C7643300A36A05 /* GuernikaModelConverterUITestsLaunchTests.swift */; };
+		E83C404029D4EED70078E462 /* DetailColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C403A29D4EE420078E462 /* DetailColumn.swift */; };
+		E83C404129D4EED70078E462 /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C403B29D4EE420078E462 /* Sidebar.swift */; };
+		E83C404229D4EED70078E462 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C403C29D4EE420078E462 /* ContentView.swift */; };
+		E83C404529D4F1560078E462 /* ComputeUnits.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C404429D4F1560078E462 /* ComputeUnits.swift */; };
+		E83C404829D4F2790078E462 /* ConvertModelViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C404729D4F2790078E462 /* ConvertModelViewModel.swift */; };
+		E83C404A29D4F2960078E462 /* ConvertModelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C404929D4F2960078E462 /* ConvertModelView.swift */; };
+		E83C404C29D4F61B0078E462 /* ModelOrigin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C404B29D4F61B0078E462 /* ModelOrigin.swift */; };
+		E83C404E29D4F9B60078E462 /* IntegerField.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C404D29D4F9B60078E462 /* IntegerField.swift */; };
+		E83C405029D581490078E462 /* ConverterProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C404F29D581490078E462 /* ConverterProcess.swift */; };
+		E83C405229D5A1880078E462 /* CircularProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C405129D5A1880078E462 /* CircularProgress.swift */; };
+		E83C405529D5DB5E0078E462 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C405429D5DB5E0078E462 /* LogView.swift */; };
+		E83C405729D5DBE50078E462 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C405629D5DBE50078E462 /* Logger.swift */; };
+		E85FB4C12A3DC20E0067ACC2 /* GuernikaTools in Copy GuernikaTools */ = {isa = PBXBuildFile; fileRef = E85FB4BF2A3DC1B40067ACC2 /* GuernikaTools */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E8FDCF592A3FCFC600483B18 /* Compression.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8FDCF582A3FCFC600483B18 /* Compression.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,10 +50,27 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		E82729AF29D7424C0029C1A9 /* Copy GuernikaTools */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 6;
+			files = (
+				E85FB4C12A3DC20E0067ACC2 /* GuernikaTools in Copy GuernikaTools */,
+			);
+			name = "Copy GuernikaTools";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		E82F887929C7643200A36A05 /* GuernikaModelConverter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GuernikaModelConverter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E80728E129D6336D0045ECAC /* ConvertControlNetViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertControlNetViewModel.swift; sourceTree = "<group>"; };
+		E80728E329D633730045ECAC /* ConvertControlNetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertControlNetView.swift; sourceTree = "<group>"; };
+		E82729A929D6E29D0029C1A9 /* Version.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Version.swift; sourceTree = "<group>"; };
+		E82729AC29D70C220029C1A9 /* DestinationToolbarButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationToolbarButton.swift; sourceTree = "<group>"; };
+		E82F887929C7643200A36A05 /* Guernika Model Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Guernika Model Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E82F887C29C7643200A36A05 /* GuernikaModelConverterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuernikaModelConverterApp.swift; sourceTree = "<group>"; };
-		E82F887E29C7643200A36A05 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		E82F888029C7643300A36A05 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E82F888329C7643300A36A05 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		E82F888529C7643300A36A05 /* GuernikaModelConverter.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GuernikaModelConverter.entitlements; sourceTree = "<group>"; };
@@ -45,6 +79,21 @@
 		E82F889429C7643300A36A05 /* GuernikaModelConverterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GuernikaModelConverterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E82F889829C7643300A36A05 /* GuernikaModelConverterUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuernikaModelConverterUITests.swift; sourceTree = "<group>"; };
 		E82F889A29C7643300A36A05 /* GuernikaModelConverterUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuernikaModelConverterUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		E83C403A29D4EE420078E462 /* DetailColumn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailColumn.swift; sourceTree = "<group>"; };
+		E83C403B29D4EE420078E462 /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
+		E83C403C29D4EE420078E462 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		E83C404429D4F1560078E462 /* ComputeUnits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeUnits.swift; sourceTree = "<group>"; };
+		E83C404729D4F2790078E462 /* ConvertModelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertModelViewModel.swift; sourceTree = "<group>"; };
+		E83C404929D4F2960078E462 /* ConvertModelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertModelView.swift; sourceTree = "<group>"; };
+		E83C404B29D4F61B0078E462 /* ModelOrigin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelOrigin.swift; sourceTree = "<group>"; };
+		E83C404D29D4F9B60078E462 /* IntegerField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegerField.swift; sourceTree = "<group>"; };
+		E83C404F29D581490078E462 /* ConverterProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterProcess.swift; sourceTree = "<group>"; };
+		E83C405129D5A1880078E462 /* CircularProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgress.swift; sourceTree = "<group>"; };
+		E83C405429D5DB5E0078E462 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
+		E83C405629D5DBE50078E462 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
+		E85FB4BF2A3DC1B40067ACC2 /* GuernikaTools */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = GuernikaTools; sourceTree = "<group>"; };
+		E8ECA9A82A60C8A400E61B48 /* guernikatools */ = {isa = PBXFileReference; lastKnownFileType = text; name = guernikatools; path = GuernikaTools/guernikatools; sourceTree = SOURCE_ROOT; };
+		E8FDCF582A3FCFC600483B18 /* Compression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Compression.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,6 +121,25 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E80728E029D633580045ECAC /* ConvertControlNet */ = {
+			isa = PBXGroup;
+			children = (
+				E80728E129D6336D0045ECAC /* ConvertControlNetViewModel.swift */,
+				E80728E329D633730045ECAC /* ConvertControlNetView.swift */,
+			);
+			path = ConvertControlNet;
+			sourceTree = "<group>";
+		};
+		E82729AB29D70B950029C1A9 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				E83C404D29D4F9B60078E462 /* IntegerField.swift */,
+				E83C405129D5A1880078E462 /* CircularProgress.swift */,
+				E82729AC29D70C220029C1A9 /* DestinationToolbarButton.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 		E82F887029C7643200A36A05 = {
 			isa = PBXGroup;
 			children = (
@@ -85,7 +153,7 @@
 		E82F887A29C7643200A36A05 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E82F887929C7643200A36A05 /* GuernikaModelConverter.app */,
+				E82F887929C7643200A36A05 /* Guernika Model Converter.app */,
 				E82F888A29C7643300A36A05 /* GuernikaModelConverterTests.xctest */,
 				E82F889429C7643300A36A05 /* GuernikaModelConverterUITests.xctest */,
 			);
@@ -96,9 +164,16 @@
 			isa = PBXGroup;
 			children = (
 				E82F887C29C7643200A36A05 /* GuernikaModelConverterApp.swift */,
-				E82F887E29C7643200A36A05 /* ContentView.swift */,
+				E83C403929D4EE420078E462 /* Navigation */,
+				E83C404629D4F2690078E462 /* ConvertModel */,
+				E80728E029D633580045ECAC /* ConvertControlNet */,
+				E83C405329D5DB540078E462 /* Log */,
+				E82729AB29D70B950029C1A9 /* Views */,
+				E83C404329D4F1490078E462 /* Model */,
 				E82F888029C7643300A36A05 /* Assets.xcassets */,
+				E85FB4BF2A3DC1B40067ACC2 /* GuernikaTools */,
 				E82F888529C7643300A36A05 /* GuernikaModelConverter.entitlements */,
+				E8ECA9A82A60C8A400E61B48 /* guernikatools */,
 				E82F888229C7643300A36A05 /* Preview Content */,
 			);
 			path = GuernikaModelConverter;
@@ -129,6 +204,46 @@
 			path = GuernikaModelConverterUITests;
 			sourceTree = "<group>";
 		};
+		E83C403929D4EE420078E462 /* Navigation */ = {
+			isa = PBXGroup;
+			children = (
+				E83C403C29D4EE420078E462 /* ContentView.swift */,
+				E83C403B29D4EE420078E462 /* Sidebar.swift */,
+				E83C403A29D4EE420078E462 /* DetailColumn.swift */,
+			);
+			path = Navigation;
+			sourceTree = "<group>";
+		};
+		E83C404329D4F1490078E462 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				E83C405629D5DBE50078E462 /* Logger.swift */,
+				E82729A929D6E29D0029C1A9 /* Version.swift */,
+				E83C404B29D4F61B0078E462 /* ModelOrigin.swift */,
+				E83C404429D4F1560078E462 /* ComputeUnits.swift */,
+				E8FDCF582A3FCFC600483B18 /* Compression.swift */,
+				E83C404F29D581490078E462 /* ConverterProcess.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		E83C404629D4F2690078E462 /* ConvertModel */ = {
+			isa = PBXGroup;
+			children = (
+				E83C404729D4F2790078E462 /* ConvertModelViewModel.swift */,
+				E83C404929D4F2960078E462 /* ConvertModelView.swift */,
+			);
+			path = ConvertModel;
+			sourceTree = "<group>";
+		};
+		E83C405329D5DB540078E462 /* Log */ = {
+			isa = PBXGroup;
+			children = (
+				E83C405429D5DB5E0078E462 /* LogView.swift */,
+			);
+			path = Log;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -139,6 +254,7 @@
 				E82F887529C7643200A36A05 /* Sources */,
 				E82F887629C7643200A36A05 /* Frameworks */,
 				E82F887729C7643200A36A05 /* Resources */,
+				E82729AF29D7424C0029C1A9 /* Copy GuernikaTools */,
 			);
 			buildRules = (
 			);
@@ -146,7 +262,7 @@
 			);
 			name = GuernikaModelConverter;
 			productName = GuernikaModelConverter;
-			productReference = E82F887929C7643200A36A05 /* GuernikaModelConverter.app */;
+			productReference = E82F887929C7643200A36A05 /* Guernika Model Converter.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E82F888929C7643300A36A05 /* GuernikaModelConverterTests */ = {
@@ -193,7 +309,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1420;
-				LastUpgradeCheck = 1420;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					E82F887829C7643200A36A05 = {
 						CreatedOnToolsVersion = 14.2;
@@ -259,8 +375,24 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E82F887F29C7643200A36A05 /* ContentView.swift in Sources */,
+				E82729AD29D70C220029C1A9 /* DestinationToolbarButton.swift in Sources */,
+				E83C404529D4F1560078E462 /* ComputeUnits.swift in Sources */,
+				E83C405529D5DB5E0078E462 /* LogView.swift in Sources */,
+				E83C404029D4EED70078E462 /* DetailColumn.swift in Sources */,
+				E83C404A29D4F2960078E462 /* ConvertModelView.swift in Sources */,
+				E80728E229D6336D0045ECAC /* ConvertControlNetViewModel.swift in Sources */,
+				E83C404829D4F2790078E462 /* ConvertModelViewModel.swift in Sources */,
+				E83C405029D581490078E462 /* ConverterProcess.swift in Sources */,
+				E83C404229D4EED70078E462 /* ContentView.swift in Sources */,
+				E83C404E29D4F9B60078E462 /* IntegerField.swift in Sources */,
+				E83C404C29D4F61B0078E462 /* ModelOrigin.swift in Sources */,
+				E80728E429D633730045ECAC /* ConvertControlNetView.swift in Sources */,
+				E83C405729D5DBE50078E462 /* Logger.swift in Sources */,
+				E83C404129D4EED70078E462 /* Sidebar.swift in Sources */,
+				E8FDCF592A3FCFC600483B18 /* Compression.swift in Sources */,
 				E82F887D29C7643200A36A05 /* GuernikaModelConverterApp.swift in Sources */,
+				E82729AA29D6E29D0029C1A9 /* Version.swift in Sources */,
+				E83C405229D5A1880078E462 /* CircularProgress.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -330,6 +462,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -390,6 +523,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -419,19 +553,21 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"GuernikaModelConverter/Preview Content\"";
 				DEVELOPMENT_TEAM = A5ZC2LG374;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 5.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.guiyec.GuernikaModelConverter;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Guernika Model Converter";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -446,19 +582,21 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"GuernikaModelConverter/Preview Content\"";
 				DEVELOPMENT_TEAM = A5ZC2LG374;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 5.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.guiyec.GuernikaModelConverter;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Guernika Model Converter";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -471,6 +609,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = A5ZC2LG374;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.1;
@@ -490,6 +629,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = A5ZC2LG374;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.1;
@@ -508,6 +648,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = A5ZC2LG374;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
@@ -525,6 +666,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = A5ZC2LG374;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;

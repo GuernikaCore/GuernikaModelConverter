@@ -1,0 +1,11 @@
+coremltools>=7.0b1
+diffusers[torch]
+torch
+transformers==4.29.2
+scipy
+scikit-learn==1.1.2
+pytest
+pytorch_lightning
+omegaconf
+six
+pyinstaller
