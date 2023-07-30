@@ -55,16 +55,11 @@ class CrossAttention(nn.Module):
         self.dim_head = dim_head
 
         self.to_q = nn.Conv2d(query_dim, inner_dim, kernel_size=1, bias=False)
-        self.to_k = nn.Conv2d(context_dim,
-                              inner_dim,
-                              kernel_size=1,
-                              bias=False)
-        self.to_v = nn.Conv2d(context_dim,
-                              inner_dim,
-                              kernel_size=1,
-                              bias=False)
+        self.to_k = nn.Conv2d(context_dim, inner_dim, kernel_size=1, bias=False)
+        self.to_v = nn.Conv2d(context_dim, inner_dim, kernel_size=1,  bias=False)
         self.to_out = nn.Sequential(
-            nn.Conv2d(inner_dim, query_dim, kernel_size=1, bias=True))
+            nn.Conv2d(inner_dim, query_dim, kernel_size=1, bias=True)
+        )
 
     def forward(self, hidden_states, context=None, mask=None):
         if self.training:
@@ -115,16 +110,8 @@ def linear_to_conv2d_map(state_dict, prefix, local_metadata, strict,
     """ Unsqueeze twice to map nn.Linear weights to nn.Conv2d weights
     """
     for k in state_dict:
-        is_internal_proj = all(substr in k for substr in ["to_", ".weight"])
-        is_ff_proj = all(substr in k for substr in ["ff.", ".weight"])
-        is_temb_proj = all(substr in k for substr in ["time_emb", ".weight"])
-        is_addemb_proj = all(substr in k for substr in ["add_embedding", ".weight"])
-        is_proj_in = "proj_in.weight" in k
-        is_proj_out = "proj_out.weight" in k
-
-        if is_internal_proj or is_ff_proj or is_temb_proj or is_addemb_proj or is_proj_in or is_proj_out:
-            if len(state_dict[k].shape) == 2:
-                state_dict[k] = state_dict[k][:, :, None, None]
+        if 'weight' in k and len(state_dict[k].shape) == 2:
+            state_dict[k] = state_dict[k][:, :, None, None]
 
 # Note: torch.nn.LayerNorm and ane_transformers.reference.layer_norm.LayerNormANE
 # apply scale and bias terms in opposite orders. In order to accurately restore a
@@ -132,9 +119,7 @@ def linear_to_conv2d_map(state_dict, prefix, local_metadata, strict,
 def correct_for_bias_scale_order_inversion(state_dict, prefix, local_metadata,
                                            strict, missing_keys,
                                            unexpected_keys, error_msgs):
-    state_dict[prefix +
-               "bias"] = state_dict[prefix + "bias"] / state_dict[prefix +
-                                                                  "weight"]
+    state_dict[prefix + "bias"] = state_dict[prefix + "bias"] / state_dict[prefix + "weight"]
     return state_dict
 
 
@@ -177,8 +162,7 @@ class CrossAttnUpBlock2D(nn.Module):
         self.attn_num_head_channels = attn_num_head_channels
 
         for i in range(num_layers):
-            res_skip_channels = in_channels if (i == num_layers -
-                                                1) else out_channels
+            res_skip_channels = in_channels if (i == num_layers - 1) else out_channels
             resnet_in_channels = prev_output_channel if i == 0 else out_channels
 
             resnets.append(
@@ -189,7 +173,8 @@ class CrossAttnUpBlock2D(nn.Module):
                     eps=resnet_eps,
                     groups=resnet_groups,
                     time_embedding_norm=resnet_time_scale_shift,
-                ))
+                )
+            )
             attentions.append(
                 SpatialTransformer(
                     out_channels,
@@ -197,7 +182,8 @@ class CrossAttnUpBlock2D(nn.Module):
                     out_channels // attn_num_head_channels,
                     depth=transformer_layers_per_block,
                     context_dim=cross_attention_dim,
-                ))
+                )
+            )
         self.attentions = nn.ModuleList(attentions)
         self.resnets = nn.ModuleList(resnets)
         self.upsamplers = None
@@ -212,9 +198,7 @@ class CrossAttnUpBlock2D(nn.Module):
         for resnet, attn in zip(self.resnets, self.attentions):
             res_hidden_states = res_hidden_states_tuple[-1]
             res_hidden_states_tuple = res_hidden_states_tuple[:-1]
-            hidden_states = torch.cat([hidden_states, res_hidden_states],
-                                      dim=1)
-
+            hidden_states = torch.cat([hidden_states, res_hidden_states], dim=1)
             hidden_states = resnet(hidden_states, temb)
             hidden_states = attn(hidden_states, context=encoder_hidden_states)
 
@@ -255,7 +239,8 @@ class UpBlock2D(nn.Module):
                     eps=resnet_eps,
                     groups=resnet_groups,
                     time_embedding_norm=resnet_time_scale_shift,
-                ))
+                )
+            )
 
         self.resnets = nn.ModuleList(resnets)
         self.upsamplers = None
@@ -707,8 +692,7 @@ class UNetMidBlock2DCrossAttn(nn.Module):
 
         self.attention_type = attention_type
         self.attn_num_head_channels = attn_num_head_channels
-        resnet_groups = resnet_groups if resnet_groups is not None else min(
-            in_channels // 4, 32)
+        resnet_groups = resnet_groups if resnet_groups is not None else min(in_channels // 4, 32)
 
         resnets = [
             ResnetBlock2D(
@@ -813,14 +797,15 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
 
         # input
         conv_in_padding = (conv_in_kernel - 1) // 2
-        self.conv_in = nn.Conv2d(in_channels,
-                                 block_out_channels[0],
-                                 kernel_size=conv_in_kernel,
-                                 padding=conv_in_padding)
+        self.conv_in = nn.Conv2d(
+            in_channels,
+            block_out_channels[0],
+            kernel_size=conv_in_kernel,
+            padding=conv_in_padding
+        )
 
         # time
-        time_proj = Timesteps(block_out_channels[0], flip_sin_to_cos,
-                              freq_shift)
+        time_proj = Timesteps(block_out_channels[0], flip_sin_to_cos, freq_shift)
         timestep_input_dim = block_out_channels[0]
         time_embedding = TimestepEmbedding(timestep_input_dim, time_embed_dim)
 

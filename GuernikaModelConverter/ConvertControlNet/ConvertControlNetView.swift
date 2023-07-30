@@ -27,6 +27,9 @@ struct ConvertControlNetView: View {
                 toolbarItems
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            model.cancel()
+        }
         .alert("Error", isPresented: $model.showError, actions: {
             if model.isCoreMLError {
                 Button("Install Xcode") {

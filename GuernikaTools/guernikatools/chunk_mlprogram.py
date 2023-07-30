@@ -248,8 +248,9 @@ def main(args):
     prog_chunk1 = _make_first_chunk_prog(prog, op_idx)
 
     # Build the second chunk
-    prog_chunk2 = _make_second_chunk_prog(_load_prog_from_mlmodel(model),
-                                          op_idx)
+    prog_chunk2 = _make_second_chunk_prog(_load_prog_from_mlmodel(model), op_idx)
+    
+    user_defined_metadata = model.user_defined_metadata
 
     if not args.check_output_correctness:
         # Original model no longer needed in memory
@@ -277,6 +278,11 @@ def main(args):
     del prog_chunk2
     gc.collect()
     logger.info("Conversion of second chunk done.")
+        
+    for key in user_defined_metadata:
+        if "com.github.apple" not in key:
+            model_chunk1.user_defined_metadata[key] = user_defined_metadata[key]
+            model_chunk2.user_defined_metadata[key] = user_defined_metadata[key]
 
     # Verify output correctness
     if args.check_output_correctness:
