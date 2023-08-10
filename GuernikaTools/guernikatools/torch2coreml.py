@@ -13,7 +13,8 @@ import argparse
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 import coremltools as ct
-from diffusers import DiffusionPipeline, StableDiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionControlNetPipeline, ControlNetModel
+from diffusers import DiffusionPipeline, StableDiffusionPipeline, StableDiffusionXLPipeline
+from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, StableDiffusionXLControlNetPipeline
 from diffusers.pipelines.stable_diffusion.convert_from_ckpt import download_from_original_stable_diffusion_ckpt
 import gc
 
@@ -766,9 +767,9 @@ def convert_controlnet(pipe, args):
         return
 
     # Register the selected attention implementation globally
-    controlnet.ATTENTION_IMPLEMENTATION_IN_EFFECT = controlnet.AttentionImplementations[args.attention_implementation]
+    unet.ATTENTION_IMPLEMENTATION_IN_EFFECT = unet.AttentionImplementations[args.attention_implementation]
     logger.info(
-        f"Attention implementation in effect: {controlnet.ATTENTION_IMPLEMENTATION_IN_EFFECT}"
+        f"Attention implementation in effect: {unet.ATTENTION_IMPLEMENTATION_IN_EFFECT}"
     )
 
     # Prepare sample input shapes and values
@@ -798,7 +799,7 @@ def convert_controlnet(pipe, args):
 
     encoder_hidden_states_shape = (
         batch_size,
-        pipe.text_encoder.config.hidden_size,
+        pipe.controlnet.config.cross_attention_dim,
         1,
         pipe.text_encoder.config.max_position_embeddings,
     )
@@ -806,15 +807,39 @@ def convert_controlnet(pipe, args):
     # Create the scheduled timesteps for downstream use
     DEFAULT_NUM_INFERENCE_STEPS = 50
     pipe.scheduler.set_timesteps(DEFAULT_NUM_INFERENCE_STEPS)
-
-    sample_controlnet_inputs = OrderedDict([
+    
+    output_names = [
+        "down_block_res_samples_00", "down_block_res_samples_01", "down_block_res_samples_02",
+        "down_block_res_samples_03", "down_block_res_samples_04", "down_block_res_samples_05",
+        "down_block_res_samples_06", "down_block_res_samples_07", "down_block_res_samples_08"
+    ]
+    sample_controlnet_inputs = [
         ("sample", torch.rand(*sample_shape)),
         ("timestep",
          torch.tensor([pipe.scheduler.timesteps[0].item()] *
                       (batch_size)).to(torch.float32)),
         ("encoder_hidden_states", torch.rand(*encoder_hidden_states_shape)),
         ("controlnet_cond", torch.rand(*cond_shape))
-    ])
+    ]
+    if hasattr(pipe.controlnet.config, "addition_embed_type") and pipe.controlnet.config.addition_embed_type == "text_time":
+        text_embeds_shape = (
+            batch_size,
+            pipe.text_encoder_2.config.hidden_size,
+        )
+        time_ids_input = [
+            [args.output_h, args.output_w, 0, 0, args.output_h, args.output_w],
+            [args.output_h, args.output_w, 0, 0, args.output_h, args.output_w]
+        ]
+        sample_controlnet_inputs = sample_controlnet_inputs + [
+            ("text_embeds", torch.rand(*text_embeds_shape)),
+            ("time_ids", torch.tensor(time_ids_input).to(torch.float32)),
+        ]
+    else:
+        # SDXL ControlNet does not generate these outputs
+        output_names = output_names + ["down_block_res_samples_09", "down_block_res_samples_10", "down_block_res_samples_11"]
+    output_names = output_names + ["mid_block_res_sample"]
+
+    sample_controlnet_inputs = OrderedDict(sample_controlnet_inputs)
     sample_controlnet_inputs_spec = {
         k: (v.shape, v.dtype)
         for k, v in sample_controlnet_inputs.items()
@@ -823,8 +848,7 @@ def convert_controlnet(pipe, args):
 
     # Initialize reference controlnet
     reference_controlnet = controlnet.ControlNetModel(**pipe.controlnet.config).eval()
-    load_state_dict_summary = reference_controlnet.load_state_dict(
-        pipe.controlnet.state_dict())
+    load_state_dict_summary = reference_controlnet.load_state_dict(pipe.controlnet.state_dict())
 
     # Prepare inputs
     baseline_sample_controlnet_inputs = deepcopy(sample_controlnet_inputs)
@@ -834,16 +858,13 @@ def convert_controlnet(pipe, args):
 
     # JIT trace
     logger.info("JIT tracing..")
-    reference_controlnet = torch.jit.trace(reference_controlnet,
-                                     list(sample_controlnet_inputs.values()))
+    reference_controlnet = torch.jit.trace(reference_controlnet, example_kwarg_inputs=sample_controlnet_inputs)
     logger.info("Done.")
 
     if args.check_output_correctness:
-        baseline_out = pipe.controlnet(**baseline_sample_controlnet_inputs,
-                                 return_dict=False)[0].numpy()
+        baseline_out = pipe.controlnet(**baseline_sample_controlnet_inputs, return_dict=False)[0].numpy()
         reference_out = reference_controlnet(**sample_controlnet_inputs)[0].numpy()
-        report_correctness(baseline_out, reference_out,
-                           "control baseline to reference PyTorch")
+        report_correctness(baseline_out, reference_out,  "control baseline to reference PyTorch")
 
     del pipe.controlnet
     gc.collect()
@@ -854,13 +875,14 @@ def convert_controlnet(pipe, args):
     }
     
     sample_coreml_inputs = _get_coreml_inputs(coreml_sample_controlnet_inputs, args)
-    coreml_controlnet, out_path = _convert_to_coreml("controlnet", reference_controlnet,
-                                               sample_coreml_inputs,
-                                               ["down_block_res_samples_00", "down_block_res_samples_01", "down_block_res_samples_02",
-                                               "down_block_res_samples_03", "down_block_res_samples_04", "down_block_res_samples_05",
-                                               "down_block_res_samples_06", "down_block_res_samples_07", "down_block_res_samples_08",
-                                               "down_block_res_samples_09", "down_block_res_samples_10", "down_block_res_samples_11",
-                                               "mid_block_res_sample"], args.precision_full, args)
+    coreml_controlnet, out_path = _convert_to_coreml(
+        "controlnet",
+        reference_controlnet,
+        sample_coreml_inputs,
+        output_names,
+        args.precision_full,
+        args
+    )
     del reference_controlnet
     gc.collect()
 
@@ -901,12 +923,13 @@ def convert_controlnet(pipe, args):
         "Residual down sample from ControlNet"
     coreml_controlnet.output_description["down_block_res_samples_08"] = \
         "Residual down sample from ControlNet"
-    coreml_controlnet.output_description["down_block_res_samples_09"] = \
-        "Residual down sample from ControlNet"
-    coreml_controlnet.output_description["down_block_res_samples_10"] = \
-        "Residual down sample from ControlNet"
-    coreml_controlnet.output_description["down_block_res_samples_11"] = \
-        "Residual down sample from ControlNet"
+    if "down_block_res_samples_09" in output_names:
+        coreml_controlnet.output_description["down_block_res_samples_09"] = \
+            "Residual down sample from ControlNet"
+        coreml_controlnet.output_description["down_block_res_samples_10"] = \
+            "Residual down sample from ControlNet"
+        coreml_controlnet.output_description["down_block_res_samples_11"] = \
+            "Residual down sample from ControlNet"
     coreml_controlnet.output_description["mid_block_res_sample"] = \
         "Residual mid sample from ControlNet"
     
@@ -1073,8 +1096,7 @@ def convert_unet(pipe, args):
 
         # Initialize reference unet
         reference_unet = unet.UNet2DConditionModel(**pipe.unet.config).eval()
-        load_state_dict_summary = reference_unet.load_state_dict(
-            pipe.unet.state_dict())
+        load_state_dict_summary = reference_unet.load_state_dict(pipe.unet.state_dict())
 
         # Prepare inputs
         baseline_sample_unet_inputs = deepcopy(sample_unet_inputs)
@@ -1416,15 +1438,23 @@ def main(args):
         controlnet = ControlNetModel.from_pretrained(args.controlnet_version, use_auth_token=True)
     
     if not args.model_version:
-        if not controlnet or controlnet.config.cross_attention_dim == 768:
-            args.model_version = "CompVis/stable-diffusion-v1-4"
+        if controlnet:
+            if controlnet.config.cross_attention_dim == 768:
+                args.model_version = "CompVis/stable-diffusion-v1-4"
+            elif controlnet.config.cross_attention_dim == 2048:
+                args.model_version = "stabilityai/stable-diffusion-xl-base-1.0"
+            else:
+                args.model_version = "stabilityai/stable-diffusion-2-1-base"
         else:
-            args.model_version = "stabilityai/stable-diffusion-2-1-base"
+            args.model_version = "CompVis/stable-diffusion-v1-4"
 
     if args.model_location:
         if controlnet:
             logger.info(f"Initializing StableDiffusionControlNetPipeline from {args.model_location}..")
-            pipe = StableDiffusionControlNetPipeline.from_pretrained(args.model_location, controlnet=controlnet, local_files_only=True)
+            try:
+                pipe = StableDiffusionXLControlNetPipeline.from_pretrained(args.model_location, controlnet=controlnet, local_files_only=True)
+            except:
+                pipe = StableDiffusionControlNetPipeline.from_pretrained(args.model_location, controlnet=controlnet, local_files_only=True)
         else:
             logger.info(f"Initializing StableDiffusionPipeline from {args.model_location}..")
             pipe = DiffusionPipeline.from_pretrained(args.model_location, local_files_only=True)
@@ -1451,7 +1481,10 @@ def main(args):
             pipe.controlnet = controlnet
     elif controlnet:
         logger.info(f"Initializing StableDiffusionControlNetPipeline with {args.model_version}..")
-        pipe = StableDiffusionControlNetPipeline.from_pretrained(args.model_version, controlnet=controlnet, use_auth_token=True)
+        try:
+            pipe = StableDiffusionXLControlNetPipeline.from_pretrained(args.model_version, controlnet=controlnet, use_auth_token=True)
+        except:
+            pipe = StableDiffusionControlNetPipeline.from_pretrained(args.model_version, controlnet=controlnet, use_auth_token=True)
     else:
         logger.info(f"Initializing StableDiffusionPipeline with {args.model_version}..")
         pipe = DiffusionPipeline.from_pretrained(args.model_version, use_auth_token=True)
