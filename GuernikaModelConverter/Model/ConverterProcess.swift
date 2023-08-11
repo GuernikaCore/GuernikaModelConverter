@@ -97,6 +97,7 @@ class ConverterProcess: ObservableObject {
         convertVaeDecoder: Bool,
         convertSafetyChecker: Bool,
         precisionFull: Bool,
+        loRAsToMerge: [LoRAInfo] = [],
         compression: Compression
     ) throws {
         guard let outputLocation else {
@@ -184,6 +185,13 @@ class ConverterProcess: ObservableObject {
         if convertSafetyChecker {
             steps.append(.convertSafetyChecker)
             arguments.append("--convert-safety-checker")
+        }
+        
+        if !loRAsToMerge.isEmpty {
+            arguments.append("--loras-to-merge")
+            for loRA in loRAsToMerge {
+                arguments.append(loRA.argument)
+            }
         }
         
         if #available(macOS 14.0, *) {

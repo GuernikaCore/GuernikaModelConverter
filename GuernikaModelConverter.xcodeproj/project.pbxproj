@@ -30,6 +30,8 @@
 		E83C405529D5DB5E0078E462 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C405429D5DB5E0078E462 /* LogView.swift */; };
 		E83C405729D5DBE50078E462 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83C405629D5DBE50078E462 /* Logger.swift */; };
 		E85FB4C12A3DC20E0067ACC2 /* GuernikaTools in Copy GuernikaTools */ = {isa = PBXBuildFile; fileRef = E85FB4BF2A3DC1B40067ACC2 /* GuernikaTools */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E87398442A85A7F8001F5E64 /* DecimalField.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87398432A85A7F8001F5E64 /* DecimalField.swift */; };
+		E87398462A85AD57001F5E64 /* LoRAInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87398452A85AD57001F5E64 /* LoRAInfo.swift */; };
 		E8FDCF592A3FCFC600483B18 /* Compression.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8FDCF582A3FCFC600483B18 /* Compression.swift */; };
 /* End PBXBuildFile section */
 
@@ -92,6 +94,8 @@
 		E83C405429D5DB5E0078E462 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
 		E83C405629D5DBE50078E462 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		E85FB4BF2A3DC1B40067ACC2 /* GuernikaTools */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = GuernikaTools; sourceTree = "<group>"; };
+		E87398432A85A7F8001F5E64 /* DecimalField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecimalField.swift; sourceTree = "<group>"; };
+		E87398452A85AD57001F5E64 /* LoRAInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoRAInfo.swift; sourceTree = "<group>"; };
 		E8ECA9A82A60C8A400E61B48 /* guernikatools */ = {isa = PBXFileReference; lastKnownFileType = text; name = guernikatools; path = GuernikaTools/guernikatools; sourceTree = SOURCE_ROOT; };
 		E8FDCF582A3FCFC600483B18 /* Compression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Compression.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -134,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				E83C404D29D4F9B60078E462 /* IntegerField.swift */,
+				E87398432A85A7F8001F5E64 /* DecimalField.swift */,
 				E83C405129D5A1880078E462 /* CircularProgress.swift */,
 				E82729AC29D70C220029C1A9 /* DestinationToolbarButton.swift */,
 			);
@@ -219,6 +224,7 @@
 			children = (
 				E83C405629D5DBE50078E462 /* Logger.swift */,
 				E82729A929D6E29D0029C1A9 /* Version.swift */,
+				E87398452A85AD57001F5E64 /* LoRAInfo.swift */,
 				E83C404B29D4F61B0078E462 /* ModelOrigin.swift */,
 				E83C404429D4F1560078E462 /* ComputeUnits.swift */,
 				E8FDCF582A3FCFC600483B18 /* Compression.swift */,
@@ -380,7 +386,9 @@
 				E83C405529D5DB5E0078E462 /* LogView.swift in Sources */,
 				E83C404029D4EED70078E462 /* DetailColumn.swift in Sources */,
 				E83C404A29D4F2960078E462 /* ConvertModelView.swift in Sources */,
+				E87398442A85A7F8001F5E64 /* DecimalField.swift in Sources */,
 				E80728E229D6336D0045ECAC /* ConvertControlNetViewModel.swift in Sources */,
+				E87398462A85AD57001F5E64 /* LoRAInfo.swift in Sources */,
 				E83C404829D4F2790078E462 /* ConvertModelViewModel.swift in Sources */,
 				E83C405029D581490078E462 /* ConverterProcess.swift in Sources */,
 				E83C404229D4EED70078E462 /* ContentView.swift in Sources */,
@@ -565,7 +573,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 5.0.4;
+				MARKETING_VERSION = 6.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.guiyec.GuernikaModelConverter;
 				PRODUCT_NAME = "Guernika Model Converter";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -594,7 +602,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 5.0.4;
+				MARKETING_VERSION = 6.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.guiyec.GuernikaModelConverter;
 				PRODUCT_NAME = "Guernika Model Converter";
 				SWIFT_EMIT_LOC_STRINGS = YES;

@@ -79,6 +79,7 @@ class ConvertModelViewModel: ObservableObject {
     @AppStorage("convert_vae_decoder") var convertVaeDecoder: Bool = true
     @AppStorage("convert_safety_checker") var convertSafetyChecker: Bool = false
     @AppStorage("precision_full") var precisionFull: Bool = false
+    @Published var loRAsToMerge: [LoRAInfo] = []
     
     private var cancellables: Set<AnyCancellable> = []
     
@@ -107,6 +108,7 @@ class ConvertModelViewModel: ObservableObject {
                 convertVaeDecoder: convertVaeDecoder,
                 convertSafetyChecker: convertSafetyChecker,
                 precisionFull: precisionFull,
+                loRAsToMerge: loRAsToMerge,
                 compression: compression
             )
             process.objectWillChange

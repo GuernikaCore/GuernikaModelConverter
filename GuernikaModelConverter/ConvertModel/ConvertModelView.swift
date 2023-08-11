@@ -11,22 +11,32 @@ struct ConvertModelView: View {
     @ObservedObject var model: ConvertModelViewModel
     
     var body: some View {
-        VStack(spacing: 16) {
+        Group {
             if model.isRunning {
-                runningView
-            } else {
-                originPicker
-                computeUnitsPicker
-                customSizePicker
-                precisionFullToggle
-                if #available(macOS 14.0, *) {
-                    compressionPicker
+                VStack(alignment: .center, spacing: 16) {
+                    runningView
                 }
-                modulesGrid
-                embeddingsSection
+                .padding()
+                .frame(maxWidth: .infinity)
+            } else {
+                ScrollView(.vertical) {
+                    VStack(alignment: .center, spacing: 16) {
+                        originPicker
+                        computeUnitsPicker
+                        customSizePicker
+                        precisionFullToggle
+                        if #available(macOS 14.0, *) {
+                            compressionPicker
+                        }
+                        modulesGrid
+                        embeddingsSection
+                        loRAPicker
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                }
             }
         }
-        .padding()
         .navigationTitle("Convert model")
         .toolbar {
             ToolbarItemGroup {
@@ -452,6 +462,51 @@ struct ConvertModelView: View {
         .frame(maxWidth: 480)
         .disabled(!model.convertTextEncoder)
         .opacity(model.convertTextEncoder ? 1 : 0.4)
+    }
+    
+    @State var selectingLoRA: Bool = false
+    
+    @ViewBuilder
+    var loRAPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("LoRA")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .foregroundColor(.secondary)
+                .font(.headline)
+                .padding(.horizontal, 4)
+            ForEach(Array(model.loRAsToMerge.enumerated()), id: \.1) { index, lora in
+                HStack(alignment: .center) {
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            _ = model.loRAsToMerge.remove(at: index)
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }.buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                    Text(lora.url.lastPathComponent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    LabeledDecimalField("Ratio", value: $model.loRAsToMerge[index].ratio)
+                        .frame(width: 180)
+                }
+            }
+            Button("Select LoRA") {
+                selectingLoRA = true
+            }
+            Text("Selected LoRAs will be merged with the checkpoint before conversion")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 5)
+        }.frame(maxWidth: 480)
+            .fileImporter(isPresented: $selectingLoRA, allowedContentTypes: [.item]) { result in
+                if case .success(let loRAUrl) = result {
+                    withAnimation(.spring(response: 0.3)) {
+                        model.loRAsToMerge.append(LoRAInfo(url: loRAUrl, ratio: 1))
+                    }
+                } else {
+                    print("File import failed")
+                }
+            }
     }
     
     @ViewBuilder
