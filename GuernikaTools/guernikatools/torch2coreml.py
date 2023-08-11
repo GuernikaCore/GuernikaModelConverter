@@ -7,6 +7,7 @@ from guernikatools._version import __version__
 from guernikatools import (
     unet, controlnet, chunk_mlprogram
 )
+from guernikatools.merge_lora import merge_to_sd_model
 
 import json
 import argparse
@@ -797,9 +798,10 @@ def convert_controlnet(pipe, args):
             "convert_text_encoder() deletes pipe.text_encoder to save RAM. "
             "Please use convert_controlnet() before convert_text_encoder()")
 
+    hidden_size = pipe.controlnet.config.cross_attention_dim
     encoder_hidden_states_shape = (
         batch_size,
-        pipe.controlnet.config.cross_attention_dim,
+        hidden_size,
         1,
         pipe.text_encoder.config.max_position_embeddings,
     )
@@ -938,7 +940,7 @@ def convert_controlnet(pipe, args):
     coreml_controlnet.user_defined_metadata["converter_version"] = __version__
     coreml_controlnet.user_defined_metadata["attention_implementation"] = args.attention_implementation
     coreml_controlnet.user_defined_metadata["compute_unit"] = args.compute_unit
-    coreml_controlnet.user_defined_metadata["hidden_size"] = str(pipe.text_encoder.config.hidden_size)
+    coreml_controlnet.user_defined_metadata["hidden_size"] = str(hidden_size)
     controlnet_method = controlnet_method_from(args.controlnet_version)
     if controlnet_method:
         coreml_controlnet.user_defined_metadata["method"] = controlnet_method
@@ -1497,7 +1499,12 @@ def main(args):
             pipe.load_textual_inversion(file, local_files_only=True)
         args.added_vocab = pipe.tokenizer.get_added_vocab()
         logger.info(f"Added embeddings: {args.added_vocab}")
-    
+        
+    if args.loras_to_merge:
+        loras_locations = [lora_info.split(":", 1)[0] for lora_info in args.loras_to_merge]
+        loras_ratios = [float(lora_info.split(":", 1)[1]) for lora_info in args.loras_to_merge]
+        logger.info(f"Merging LoRAs at: {loras_locations}")
+        merge_to_sd_model(pipe.text_encoder, pipe.unet, loras_locations, loras_ratios)
     
     logger.info(f"Done.")
     check_output_size(pipe, args)
@@ -1575,14 +1582,18 @@ def parser_spec():
     parser.add_argument(
         "--model-location",
         default=None,
-        help=
-        "The local pre-trained model checkpoint and configuration to restore."
+        help="The local pre-trained model checkpoint and configuration to restore."
     )
     parser.add_argument(
         "--embeddings-location",
         default=None,
-        help=
-        "Folder with emebeddings to load into the TextEncoder."
+        help="Folder with emebeddings to load into the TextEncoder."
+    )
+    parser.add_argument(
+        "--loras-to-merge",
+        nargs='+',
+        default=None,
+        help="LoRAs to be merged before conversion (URL:Ratio)."
     )
     parser.add_argument(
         "--model-checkpoint-location", default=None, type=str, help="Path to the checkpoint to convert."
