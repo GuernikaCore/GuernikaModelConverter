@@ -1500,16 +1500,20 @@ def main(args):
         args.added_vocab = pipe.tokenizer.get_added_vocab()
         logger.info(f"Added embeddings: {args.added_vocab}")
         
+    args.model_is_sdxl = hasattr(pipe, "text_encoder_2") and pipe.text_encoder_2
+    
     if args.loras_to_merge:
         loras_locations = [lora_info.split(":", 1)[0] for lora_info in args.loras_to_merge]
         loras_ratios = [float(lora_info.split(":", 1)[1]) for lora_info in args.loras_to_merge]
         logger.info(f"Merging LoRAs at: {loras_locations}")
-        merge_to_sd_model(pipe.text_encoder, pipe.unet, loras_locations, loras_ratios)
+        
+        if args.model_is_sdxl:
+            merge_to_sd_model(pipe.unet, pipe.text_encoder, pipe.text_encoder_2, loras_locations, loras_ratios)
+        else:
+            merge_to_sd_model(pipe.unet, pipe.text_encoder, None, loras_locations, loras_ratios)
     
     logger.info(f"Done.")
     check_output_size(pipe, args)
-    
-    args.model_is_sdxl = hasattr(pipe, "text_encoder_2") and pipe.text_encoder_2
     
     # Convert models
     if controlnet:

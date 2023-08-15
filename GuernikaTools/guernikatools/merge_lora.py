@@ -1,10 +1,21 @@
+# Taken from: https://github.com/kohya-ss/sd-scripts/blob/main/networks/merge_lora.py
+
 import math
 import argparse
 import os
 import torch
 from safetensors.torch import load_file, save_file
-import guernikatools.lora as lora
+    
+# is it possible to apply conv_in and conv_out? -> yes, newer LoCon supports it (^^;)
+UNET_TARGET_REPLACE_MODULE = ["Transformer2DModel", "Attention"]
+UNET_TARGET_REPLACE_MODULE_CONV2D_3X3 = ["ResnetBlock2D", "Downsample2D", "Upsample2D"]
+TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
+LORA_PREFIX_UNET = "lora_unet"
+LORA_PREFIX_TEXT_ENCODER = "lora_te"
 
+# SDXL: must starts with LORA_PREFIX_TEXT_ENCODER
+LORA_PREFIX_TEXT_ENCODER_1 = "lora_te1"
+LORA_PREFIX_TEXT_ENCODER_2 = "lora_te2"
 
 def load_state_dict(file_name, dtype):
     if os.path.splitext(file_name)[1] == ".safetensors":
@@ -28,25 +39,40 @@ def save_to_file(file_name, model, state_dict, dtype):
     else:
         torch.save(model, file_name)
 
-
-def merge_to_sd_model(text_encoder, unet, models, ratios, merge_dtype=torch.float32):
-    text_encoder.to(merge_dtype)
+def merge_to_sd_model(unet, text_encoder, text_encoder_2, models, ratios, merge_dtype=torch.float32):
     unet.to(merge_dtype)
+    text_encoder.to(merge_dtype)
+    if text_encoder_2:
+        text_encoder_2.to(merge_dtype)
+    
+    layers_per_block = unet.config.layers_per_block
 
     # create module map
     name_to_module = {}
-    for i, root_module in enumerate([text_encoder, unet]):
+    for i, root_module in enumerate([unet, text_encoder, text_encoder_2]):
+        if not root_module:
+            continue
         if i == 0:
-            prefix = lora.LoRANetwork.LORA_PREFIX_TEXT_ENCODER
-            target_replace_modules = lora.LoRANetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE
-        else:
-            prefix = lora.LoRANetwork.LORA_PREFIX_UNET
+            prefix = LORA_PREFIX_UNET
             target_replace_modules = (
-                lora.LoRANetwork.UNET_TARGET_REPLACE_MODULE + lora.LoRANetwork.UNET_TARGET_REPLACE_MODULE_CONV2D_3X3
+                UNET_TARGET_REPLACE_MODULE + UNET_TARGET_REPLACE_MODULE_CONV2D_3X3
             )
+        elif text_encoder_2:
+            target_replace_modules = TEXT_ENCODER_TARGET_REPLACE_MODULE
+            if i == 1:
+                prefix = LORA_PREFIX_TEXT_ENCODER_1
+            else:
+                prefix = LORA_PREFIX_TEXT_ENCODER_2
+        else:
+            prefix = LORA_PREFIX_TEXT_ENCODER
+            target_replace_modules = TEXT_ENCODER_TARGET_REPLACE_MODULE
 
         for name, module in root_module.named_modules():
-            if module.__class__.__name__ in target_replace_modules:
+            if module.__class__.__name__ == "LoRACompatibleLinear" or module.__class__.__name__ == "LoRACompatibleConv":
+                lora_name = prefix + "." + name
+                lora_name = lora_name.replace(".", "_")
+                name_to_module[lora_name] = module
+            elif module.__class__.__name__ in target_replace_modules:
                 for child_name, child_module in module.named_modules():
                     if child_module.__class__.__name__ == "Linear" or child_module.__class__.__name__ == "Conv2d":
                         lora_name = prefix + "." + name + "." + child_name
@@ -54,10 +80,9 @@ def merge_to_sd_model(text_encoder, unet, models, ratios, merge_dtype=torch.floa
                         name_to_module[lora_name] = child_module
 
     for model, ratio in zip(models, ratios):
-        print(f"loading: {model}")
+        print(f"Merging: {model}")
         lora_sd = load_state_dict(model, merge_dtype)
 
-        print(f"merging...")
         for key in lora_sd.keys():
             if "lora_down" in key:
                 up_key = key.replace("lora_down", "lora_up")
@@ -65,6 +90,34 @@ def merge_to_sd_model(text_encoder, unet, models, ratios, merge_dtype=torch.floa
 
                 # find original module for this lora
                 module_name = ".".join(key.split(".")[:-2])  # remove trailing ".lora_down.weight"
+                if "input_blocks" in module_name:
+                    i = int(module_name.split("input_blocks_", 1)[1].split("_", 1)[0])
+                    block_id = (i - 1) // (layers_per_block + 1)
+                    layer_in_block_id = (i - 1) % (layers_per_block + 1)
+                    module_name = module_name.replace(f"input_blocks_{i}_0", f"down_blocks_{block_id}_resnets_{layer_in_block_id}")
+                    module_name = module_name.replace(f"input_blocks_{i}_1", f"down_blocks_{block_id}_attentions_{layer_in_block_id}")
+                    module_name = module_name.replace(f"input_blocks_{i}_2", f"down_blocks_{block_id}_resnets_{layer_in_block_id}")
+                if "middle_block" in module_name:
+                    module_name = module_name.replace("middle_block_0", "mid_block_resnets_0")
+                    module_name = module_name.replace("middle_block_1", "mid_block_attentions_0")
+                    module_name = module_name.replace("middle_block_2", "mid_block_resnets_1")
+                if "output_blocks" in module_name:
+                    i = int(module_name.split("output_blocks_", 1)[1].split("_", 1)[0])
+                    block_id = i // (layers_per_block + 1)
+                    layer_in_block_id = i % (layers_per_block + 1)
+                    module_name = module_name.replace(f"output_blocks_{i}_0", f"up_blocks_{block_id}_resnets_{layer_in_block_id}")
+                    module_name = module_name.replace(f"output_blocks_{i}_1", f"up_blocks_{block_id}_attentions_{layer_in_block_id}")
+                    module_name = module_name.replace(f"output_blocks_{i}_2", f"up_blocks_{block_id}_resnets_{layer_in_block_id}")
+                
+                module_name = module_name.replace("in_layers_0", "norm1")
+                module_name = module_name.replace("in_layers_2", "conv1")
+
+                module_name = module_name.replace("out_layers_0", "norm2")
+                module_name = module_name.replace("out_layers_3", "conv2")
+
+                module_name = module_name.replace("emb_layers_1", "time_emb_proj")
+                module_name = module_name.replace("skip_connection", "conv_shortcut")
+
                 if module_name not in name_to_module:
                     print(f"no module found for LoRA weight: {key}")
                     continue
@@ -83,6 +136,9 @@ def merge_to_sd_model(text_encoder, unet, models, ratios, merge_dtype=torch.floa
                 # print(module_name, down_weight.size(), up_weight.size())
                 if len(weight.size()) == 2:
                     # linear
+                    if len(up_weight.size()) == 4:  # use linear projection mismatch
+                        up_weight = up_weight.squeeze(3).squeeze(2)
+                        down_weight = down_weight.squeeze(3).squeeze(2)
                     weight = weight + ratio * (up_weight @ down_weight) * scale
                 elif down_weight.size()[2:4] == (1, 1):
                     # conv2d 1x1
