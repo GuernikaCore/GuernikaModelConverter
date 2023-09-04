@@ -103,14 +103,6 @@ def _get_out_path(args, submodule_name):
     return os.path.join(args.o, fname)
 
 
-# https://github.com/apple/coremltools/issues/1680
-def _save_mlpackage(model, output_path):
-    # First recreate MLModel object using its in memory spec, then save
-    ct.models.MLModel(model._spec,
-                      weights_dir=model._weights_dir,
-                      is_temp_package=True).save(output_path)
-
-
 def _convert_to_coreml(submodule_name, torchscript_module, coreml_inputs,
                        output_names, precision_full, args):
     out_path = _get_out_path(args, submodule_name)
@@ -383,7 +375,7 @@ def convert_text_encoder(pipe, args):
     coreml_text_encoder.user_defined_metadata["compute_unit"] = args.compute_unit
     coreml_text_encoder.user_defined_metadata["hidden_size"] = str(pipe.text_encoder.config.hidden_size)
 
-    _save_mlpackage(coreml_text_encoder, out_path)
+    coreml_text_encoder.save(out_path)
 
     logger.info(f"Saved text_encoder into {out_path}")
 
@@ -489,7 +481,7 @@ def convert_text_encoder_2(pipe, args):
     coreml_text_encoder.user_defined_metadata["compute_unit"] = args.compute_unit
     coreml_text_encoder.user_defined_metadata["hidden_size"] = str(pipe.text_encoder_2.config.hidden_size)
 
-    _save_mlpackage(coreml_text_encoder, out_path)
+    coreml_text_encoder.save(out_path)
 
     logger.info(f"Saved text_encoder_2 into {out_path}")
 
@@ -634,7 +626,7 @@ def convert_vae_encoder(pipe, args):
     coreml_vae_encoder.user_defined_metadata["compute_unit"] = args.compute_unit
     coreml_vae_encoder.user_defined_metadata["scaling_factor"] = str(pipe.vae.config.scaling_factor)
 
-    _save_mlpackage(coreml_vae_encoder, out_path)
+    coreml_vae_encoder.save(out_path)
 
     logger.info(f"Saved vae_encoder into {out_path}")
 
@@ -732,7 +724,7 @@ def convert_vae_decoder(pipe, args):
     coreml_vae_decoder.user_defined_metadata["compute_unit"] = args.compute_unit
     coreml_vae_decoder.user_defined_metadata["scaling_factor"] = str(pipe.vae.config.scaling_factor)
 
-    _save_mlpackage(coreml_vae_decoder, out_path)
+    coreml_vae_decoder.save(out_path)
 
     logger.info(f"Saved vae_decoder into {out_path}")
 
@@ -945,7 +937,7 @@ def convert_controlnet(pipe, args):
     if controlnet_method:
         coreml_controlnet.user_defined_metadata["method"] = controlnet_method
     
-    _save_mlpackage(coreml_controlnet, out_path)
+    coreml_controlnet.save(out_path)
     logger.info(f"Saved controlnet into {out_path}")
 
     # Parity check PyTorch vs CoreML
@@ -1182,7 +1174,7 @@ def convert_unet(pipe, args):
         if requires_aesthetics_score:
             coreml_unet.user_defined_metadata["requires_aesthetics_score"] = "true"
          
-        _save_mlpackage(coreml_unet, out_path)
+        coreml_unet.save(out_path)
         logger.info(f"Saved unet into {out_path}")
 
         # Parity check PyTorch vs CoreML
@@ -1382,7 +1374,7 @@ def convert_safety_checker(pipe, args):
     coreml_safety_checker.user_defined_metadata["attention_implementation"] = args.attention_implementation
     coreml_safety_checker.user_defined_metadata["compute_unit"] = args.compute_unit
 
-    _save_mlpackage(coreml_safety_checker, out_path)
+    coreml_safety_checker.save(out_path)
 
     if args.check_output_correctness:
         baseline_out = pipe.safety_checker(
