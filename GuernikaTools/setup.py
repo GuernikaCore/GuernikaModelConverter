@@ -9,10 +9,10 @@ setup(
     description="Run Stable Diffusion on Apple Silicon with Guernika",
     author='Guernika',
     install_requires=[
-        "coremltools>=7.0b1",
+        "coremltools>=7.0b2",
         "diffusers[torch]",
         "torch",
-        "transformers==4.29.2",
+        "transformers>=4.30.0",
         "scipy",
         "scikit-learn==1.1.2",
         "pytest",

@@ -308,20 +308,11 @@ def convert_text_encoder(pipe, args):
     }
     logger.info(f"Sample inputs spec: {sample_text_encoder_inputs_spec}")
 
-    def _build_causal_attention_mask(self, bsz, seq_len, dtype, device=None):
-        mask = torch.ones((bsz, seq_len, seq_len), dtype=dtype, device=device) * -1e4
-        mask.triu_(1)
-        mask = mask.unsqueeze(1)
-        return mask
-
     class TextEncoder(nn.Module):
 
         def __init__(self):
             super().__init__()
             self.text_encoder = pipe.text_encoder
-            setattr(
-                self.text_encoder.text_model, "_build_causal_attention_mask",
-                MethodType(_build_causal_attention_mask, self.text_encoder.text_model))
 
         def forward(self, input_ids):
             return self.text_encoder(input_ids, return_dict=False)
@@ -331,9 +322,6 @@ def convert_text_encoder(pipe, args):
         def __init__(self):
             super().__init__()
             self.text_encoder = pipe.text_encoder
-            setattr(
-                self.text_encoder.text_model, "_build_causal_attention_mask",
-                MethodType(_build_causal_attention_mask, self.text_encoder.text_model))
 
         def forward(self, input_ids):
             output = self.text_encoder(input_ids, output_hidden_states=True)
@@ -426,20 +414,11 @@ def convert_text_encoder_2(pipe, args):
     }
     logger.info(f"Sample inputs spec: {sample_text_encoder_inputs_spec}")
 
-    def _build_causal_attention_mask(self, bsz, seq_len, dtype, device=None):
-        mask = torch.ones((bsz, seq_len, seq_len), dtype=dtype, device=device) * -1e4
-        mask.triu_(1)
-        mask = mask.unsqueeze(1)
-        return mask
-
     class TextEncoder(nn.Module):
 
         def __init__(self):
             super().__init__()
             self.text_encoder = pipe.text_encoder_2
-            setattr(
-                self.text_encoder.text_model, "_build_causal_attention_mask",
-                MethodType(_build_causal_attention_mask, self.text_encoder.text_model))
 
         def forward(self, input_ids):
             output = self.text_encoder(input_ids, output_hidden_states=True)
