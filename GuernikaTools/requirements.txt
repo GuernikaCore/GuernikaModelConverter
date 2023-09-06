@@ -3,9 +3,11 @@ diffusers[torch]
 torch
 transformers>=4.30.0
 scipy
-scikit-learn==1.1.2
+numpy<1.24
 pytest
+scikit-learn
 pytorch_lightning
 omegaconf
 six
+safetensors
 pyinstaller

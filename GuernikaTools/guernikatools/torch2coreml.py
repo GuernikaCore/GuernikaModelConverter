@@ -15,7 +15,7 @@ from collections import OrderedDict, defaultdict
 from copy import deepcopy
 import coremltools as ct
 from diffusers import DiffusionPipeline, StableDiffusionPipeline, StableDiffusionXLPipeline
-from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, StableDiffusionXLControlNetPipeline
+from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, StableDiffusionXLControlNetPipeline, AutoencoderKL
 from diffusers.pipelines.stable_diffusion.convert_from_ckpt import download_from_original_stable_diffusion_ckpt
 import gc
 
@@ -43,11 +43,11 @@ torch.set_grad_enabled(False)
 from types import MethodType
 
 
-def _get_coreml_inputs(sample_inputs, args):
+def _get_coreml_inputs(sample_inputs, samples_shapes, args):
     return [
         ct.TensorType(
             name=k,
-            shape=v.shape,
+            shape=samples_shapes[k] if samples_shapes and k in samples_shapes else v.shape,
             dtype=v.numpy().dtype if isinstance(v, torch.Tensor) else v.dtype,
         ) for k, v in sample_inputs.items()
     ]
@@ -354,7 +354,7 @@ def convert_text_encoder(pipe, args):
     )
     logger.info("Done.")
 
-    sample_coreml_inputs = _get_coreml_inputs(sample_text_encoder_inputs, args)
+    sample_coreml_inputs = _get_coreml_inputs(sample_text_encoder_inputs, None, args)
     coreml_text_encoder, out_path = _convert_to_coreml(
         "text_encoder", reference_text_encoder, sample_coreml_inputs,
         ["last_hidden_state", "pooled_outputs"], args.precision_full, args)
@@ -451,7 +451,7 @@ def convert_text_encoder_2(pipe, args):
     )
     logger.info("Done.")
 
-    sample_coreml_inputs = _get_coreml_inputs(sample_text_encoder_inputs, args)
+    sample_coreml_inputs = _get_coreml_inputs(sample_text_encoder_inputs, None, args)
     coreml_text_encoder, out_path = _convert_to_coreml(
         "text_encoder_2", reference_text_encoder, sample_coreml_inputs,
         ["last_hidden_state", "pooled_outputs"], args.precision_full, args)
@@ -589,14 +589,24 @@ def convert_vae_encoder(pipe, args):
     baseline_encoder = VAEEncoder().eval()
 
     # No optimization needed for the VAE Encoder as it is a pure ConvNet
-    traced_vae_encoder = torch.jit.trace(
-        baseline_encoder, (sample_vae_encoder_inputs["z"].to(torch.float32), ))
+    traced_vae_encoder = torch.jit.trace(baseline_encoder, (sample_vae_encoder_inputs["z"].to(torch.float32), ))
 
     modify_coremltools_torch_frontend_badbmm()
+            
+    if args.multisize:
+        sample_size = args.output_h
+        input_shape = ct.Shape(shape=(
+            1,
+            3,
+            ct.RangeDim(lower_bound=int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size),
+            ct.RangeDim(lower_bound=int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size)
+        ))
+        sample_coreml_inputs = _get_coreml_inputs(sample_vae_encoder_inputs, {"z": input_shape}, args)
+    else:
+        sample_coreml_inputs = _get_coreml_inputs(sample_vae_encoder_inputs, None, args)
     
-    sample_coreml_inputs = _get_coreml_inputs(sample_vae_encoder_inputs, args)
     # SDXL seems to require full precision
-    precision_full = args.model_is_sdxl
+    precision_full = args.model_is_sdxl and args.model_version != "stabilityai/stable-diffusion-xl-base-1.0"
     coreml_vae_encoder, out_path = _convert_to_coreml(
         "vae_encoder", traced_vae_encoder, sample_coreml_inputs,
         ["latent"], precision_full, args)
@@ -660,9 +670,10 @@ def convert_vae_decoder(pipe, args):
     vae_scale_factor = 2 ** (len(pipe.vae.config.block_out_channels) - 1)
     height = int(args.output_h / vae_scale_factor)
     width = int(args.output_w / vae_scale_factor)
+    vae_latent_channels = pipe.vae.config.latent_channels
     z_shape = (
         1,  # B
-        pipe.vae.config.latent_channels,  # C
+        vae_latent_channels,  # C
         height,  # H
         width,  # w
     )
@@ -690,10 +701,21 @@ def convert_vae_decoder(pipe, args):
         baseline_decoder, (sample_vae_decoder_inputs["z"].to(torch.float32), ))
 
     modify_coremltools_torch_frontend_badbmm()
+        
+    if args.multisize:
+        sample_size = height
+        input_shape = ct.Shape(shape=(
+            1,
+            vae_latent_channels,
+            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size),
+            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size)
+        ))
+        sample_coreml_inputs = _get_coreml_inputs(sample_vae_decoder_inputs, {"z": input_shape}, args)
+    else:
+        sample_coreml_inputs = _get_coreml_inputs(sample_vae_decoder_inputs, None, args)
     
-    sample_coreml_inputs = _get_coreml_inputs(sample_vae_decoder_inputs, args)
     # SDXL seems to require full precision
-    precision_full = args.model_is_sdxl
+    precision_full = args.model_is_sdxl and args.model_version != "stabilityai/stable-diffusion-xl-base-1.0"
     coreml_vae_decoder, out_path = _convert_to_coreml(
         "vae_decoder", traced_vae_decoder, sample_coreml_inputs,
         ["image"], precision_full, args)
@@ -711,8 +733,7 @@ def convert_vae_decoder(pipe, args):
         "The denoised latent embeddings from the unet model after the last step of reverse diffusion"
 
     # Set the output descriptions
-    coreml_vae_decoder.output_description[
-        "image"] = "Generated image normalized to range [-1, 1]"
+    coreml_vae_decoder.output_description["image"] = "Generated image normalized to range [-1, 1]"
     
     # Set package version metadata
     coreml_vae_decoder.user_defined_metadata["identifier"] = args.model_version
@@ -764,13 +785,19 @@ def convert_controlnet(pipe, args):
 
     # Prepare sample input shapes and values
     batch_size = 2  # for classifier-free guidance
+    controlnet_in_channels = pipe.controlnet.config.in_channels
     vae_scale_factor = 2 ** (len(pipe.vae.config.block_out_channels) - 1)
     height = int(args.output_h / vae_scale_factor)
     width = int(args.output_w / vae_scale_factor)
     
+    # if using variable size shapes, take the biggest as base
+    if args.multisize and height != width:
+        height = max(height, width)
+        width = height
+    
     sample_shape = (
         batch_size,                    # B
-        pipe.controlnet.config.in_channels,  # C
+        controlnet_in_channels,  # C
         height,  # H
         width,  # W
     )
@@ -865,7 +892,29 @@ def convert_controlnet(pipe, args):
         for k, v in sample_controlnet_inputs.items()
     }
     
-    sample_coreml_inputs = _get_coreml_inputs(coreml_sample_controlnet_inputs, args)
+    if args.multisize:
+        sample_size = height
+        sample_input_shape = ct.Shape(shape=(
+            batch_size,
+            controlnet_in_channels,
+            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size),
+            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size)
+        ))
+        
+        cond_size = args.output_h
+        cond_input_shape = ct.Shape(shape=(
+            batch_size,
+            3,
+            ct.RangeDim(int(cond_size * 0.5), upper_bound=int(cond_size * 2), default=cond_size),
+            ct.RangeDim(int(cond_size * 0.5), upper_bound=int(cond_size * 2), default=cond_size)
+        ))
+        
+        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_controlnet_inputs, {
+            "sample": sample_input_shape,
+            "controlnet_cond": cond_input_shape,
+        }, args)
+    else:
+        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_controlnet_inputs, None, args)
     coreml_controlnet, out_path = _convert_to_coreml(
         "controlnet",
         reference_controlnet,
@@ -975,16 +1024,22 @@ def convert_unet(pipe, args):
 
         # Prepare sample input shapes and values
         batch_size = 2  # for classifier-free guidance
+        unet_in_channels = pipe.unet.config.in_channels
         # allow converting instruct pix2pix
-        if pipe.unet.config.in_channels == 8:
+        if unet_in_channels == 8:
             batch_size = 3
         vae_scale_factor = 2 ** (len(pipe.vae.config.block_out_channels) - 1)
         height = int(args.output_h / vae_scale_factor)
         width = int(args.output_w / vae_scale_factor)
         
+        # if using variable size shapes, take the biggest as base
+        if args.multisize and height != width:
+            height = max(height, width)
+            width = height
+        
         sample_shape = (
             batch_size,                    # B
-            pipe.unet.config.in_channels,  # C
+            unet_in_channels,  # C
             height,  # H
             width,  # W
         )
@@ -1076,7 +1131,27 @@ def convert_unet(pipe, args):
             sample_unet_inputs = sample_unet_inputs + [
                 ("mid_block_res_sample", torch.rand(2, output_channel, cn_height, cn_width))
             ]
-            
+        
+        multisize_inputs = None
+        if args.multisize:
+            sample_size = height
+            input_shape = ct.Shape(shape=(
+                batch_size,
+                unet_in_channels,
+                ct.RangeDim(lower_bound=int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size),
+                ct.RangeDim(lower_bound=int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size)
+            ))
+            multisize_inputs = {"sample": input_shape}
+            for k, v in sample_unet_inputs:
+                if "block_res" in k:
+                    v_height = v.shape[2]
+                    v_width = v.shape[3]
+                    multisize_inputs[k] = ct.Shape(shape=(
+                        2,
+                        output_channel,
+                        ct.RangeDim(lower_bound=int(v_height * 0.5), upper_bound=int(v_height * 2), default=v_height),
+                        ct.RangeDim(lower_bound=int(v_width * 0.5), upper_bound=int(v_width * 2), default=v_width)
+                    ))
         
         sample_unet_inputs = OrderedDict(sample_unet_inputs)
         sample_unet_inputs_spec = {
@@ -1117,7 +1192,7 @@ def convert_unet(pipe, args):
             for k, v in sample_unet_inputs.items()
         }
         
-        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_unet_inputs, args)
+        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_unet_inputs, multisize_inputs, args)
         precision_full = args.precision_full
         if not precision_full and pipe.scheduler.config.prediction_type == "v_prediction":
             precision_full = True
@@ -1176,18 +1251,15 @@ def convert_unet(pipe, args):
 
         # Parity check PyTorch vs CoreML
         if args.check_output_correctness:
-            coreml_out = list(
-                coreml_unet.predict(coreml_sample_unet_inputs).values())[0]
-            report_correctness(baseline_out, coreml_out,
-                               "unet baseline PyTorch to reference CoreML")
+            coreml_out = list(coreml_unet.predict(coreml_sample_unet_inputs).values())[0]
+            report_correctness(baseline_out, coreml_out, "unet baseline PyTorch to reference CoreML")
 
         del coreml_unet
         gc.collect()
     else:
         del pipe.unet
         gc.collect()
-        logger.info(
-            f"`unet` already exists at {out_path}, skipping conversion.")
+        logger.info(f"`unet` already exists at {out_path}, skipping conversion.")
 
     if args.chunk_unet and not unet_chunks_exist:
         logger.info("Chunking unet in two approximately equal MLModels")
@@ -1248,38 +1320,32 @@ def convert_safety_checker(pipe, args):
         """
 
         def cosine_distance(image_embeds, text_embeds):
-            return F.normalize(image_embeds) @ F.normalize(
-                text_embeds).transpose(0, 1)
+            return F.normalize(image_embeds) @ F.normalize(text_embeds).transpose(0, 1)
 
         pooled_output = self.vision_model(clip_input)[1]  # pooled_output
         image_embeds = self.visual_projection(pooled_output)
 
-        special_cos_dist = cosine_distance(image_embeds,
-                                           self.special_care_embeds)
+        special_cos_dist = cosine_distance(image_embeds, self.special_care_embeds)
         cos_dist = cosine_distance(image_embeds, self.concept_embeds)
 
         special_scores = special_cos_dist - self.special_care_embeds_weights + adjustment
         special_care = special_scores.gt(0).float().sum(dim=1).gt(0).float()
         special_adjustment = special_care * 0.01
-        special_adjustment = special_adjustment.unsqueeze(1).expand(
-            -1, cos_dist.shape[1])
+        special_adjustment = special_adjustment.unsqueeze(1).expand(-1, cos_dist.shape[1])
 
-        concept_scores = (cos_dist -
-                          self.concept_embeds_weights) + special_adjustment
-        has_nsfw_concepts = concept_scores.gt(0).float().sum(dim=1).gt(0)[:,
-                                                                          None,
-                                                                          None,
-                                                                          None]
+        concept_scores = (cos_dist - self.concept_embeds_weights) + special_adjustment
+        has_nsfw_concepts = concept_scores.gt(0).float().sum(dim=1).gt(0)[:, None, None, None]
 
-        has_nsfw_concepts_inds, _ = torch.broadcast_tensors(
-            has_nsfw_concepts, images)
+        has_nsfw_concepts_inds, _ = torch.broadcast_tensors(has_nsfw_concepts, images)
         images[has_nsfw_concepts_inds] = 0.0  # black image
+
+#        has_nsfw_concepts = concept_scores.gt(0).float().sum(dim=1).gt(0).nonzero().flatten()
+#        images[has_nsfw_concepts] = 0.0  # black image
 
         return images, has_nsfw_concepts.float(), concept_scores
 
     baseline_safety_checker = deepcopy(pipe.safety_checker.eval())
-    setattr(baseline_safety_checker, "forward",
-            MethodType(forward_coreml, baseline_safety_checker))
+    setattr(baseline_safety_checker, "forward", MethodType(forward_coreml, baseline_safety_checker))
 
     # In order to parity check the actual signal, we need to override the forward pass to return `concept_scores` which is the
     # output before thresholding
@@ -1289,14 +1355,12 @@ def convert_safety_checker(pipe, args):
         def cosine_distance(image_embeds, text_embeds):
             normalized_image_embeds = F.normalize(image_embeds)
             normalized_text_embeds = F.normalize(text_embeds)
-            return torch.mm(normalized_image_embeds,
-                            normalized_text_embeds.t())
+            return torch.mm(normalized_image_embeds, normalized_text_embeds.t())
 
         pooled_output = self.vision_model(clip_input)[1]  # pooled_output
         image_embeds = self.visual_projection(pooled_output)
 
-        special_cos_dist = cosine_distance(image_embeds,
-                                           self.special_care_embeds)
+        special_cos_dist = cosine_distance(image_embeds, self.special_care_embeds)
         cos_dist = cosine_distance(image_embeds, self.concept_embeds)
 
         adjustment = 0.0
@@ -1304,24 +1368,20 @@ def convert_safety_checker(pipe, args):
         special_scores = special_cos_dist - self.special_care_embeds_weights + adjustment
         special_care = torch.any(special_scores > 0, dim=1)
         special_adjustment = special_care * 0.01
-        special_adjustment = special_adjustment.unsqueeze(1).expand(
-            -1, cos_dist.shape[1])
+        special_adjustment = special_adjustment.unsqueeze(1).expand(-1, cos_dist.shape[1])
 
-        concept_scores = (cos_dist -
-                          self.concept_embeds_weights) + special_adjustment
+        concept_scores = (cos_dist - self.concept_embeds_weights) + special_adjustment
         has_nsfw_concepts = torch.any(concept_scores > 0, dim=1)
 
         images[has_nsfw_concepts] = 0.0
 
         return images, has_nsfw_concepts, concept_scores
 
-    setattr(pipe.safety_checker, "forward",
-            MethodType(forward_extended_return, pipe.safety_checker))
+    setattr(pipe.safety_checker, "forward", MethodType(forward_extended_return, pipe.safety_checker))
 
     # Trace the safety_checker model
     logger.info("JIT tracing..")
-    traced_safety_checker = torch.jit.trace(
-        baseline_safety_checker, list(sample_safety_checker_inputs.values()))
+    traced_safety_checker = torch.jit.trace(baseline_safety_checker, list(sample_safety_checker_inputs.values()))
     logger.info("Done.")
     del baseline_safety_checker
     gc.collect()
@@ -1333,7 +1393,28 @@ def convert_safety_checker(pipe, args):
     }
 
     # Convert safety_checker model to Core ML
-    sample_coreml_inputs = _get_coreml_inputs(coreml_sample_safety_checker_inputs, args)
+#    if args.multisize:
+#        clip_size = safety_checker_input.shape[2]
+#        clip_input_shape = ct.Shape(shape=(
+#            1,
+#            3,
+#            ct.RangeDim(int(clip_size * 0.5), upper_bound=int(clip_size * 1.5), default=clip_size),
+#            ct.RangeDim(int(clip_size * 0.5), upper_bound=int(clip_size * 1.5), default=clip_size)
+#        ))
+#        sample_size = args.output_h
+#        input_shape = ct.Shape(shape=(
+#            1,
+#            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 1.5), default=sample_size),
+#            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 1.5), default=sample_size),
+#            3
+#        ))
+#        
+#        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_safety_checker_inputs, {
+#            "clip_input": clip_input_shape, "images": input_shape
+#        }, args)
+#    else:
+#        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_safety_checker_inputs, None, args)
+    sample_coreml_inputs = _get_coreml_inputs(coreml_sample_safety_checker_inputs, None, args)
     coreml_safety_checker, out_path = _convert_to_coreml(
         "safety_checker", traced_safety_checker,
         sample_coreml_inputs,
@@ -1489,7 +1570,11 @@ def main(args):
         args.added_vocab = pipe.tokenizer.get_added_vocab()
         logger.info(f"Added embeddings: {args.added_vocab}")
         
+    args.multisize = False
     args.model_is_sdxl = hasattr(pipe, "text_encoder_2") and pipe.text_encoder_2
+    # auto apply fix if converting base SDXL
+    if args.model_version == "stabilityai/stable-diffusion-xl-base-1.0":
+        pipe.vae = AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=torch.float32)
     
     if args.loras_to_merge:
         loras_locations = [lora_info.split(":", 1)[0] for lora_info in args.loras_to_merge]
