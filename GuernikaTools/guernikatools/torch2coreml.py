@@ -697,8 +697,7 @@ def convert_vae_decoder(pipe, args):
     baseline_decoder = VAEDecoder().eval()
 
     # No optimization needed for the VAE Decoder as it is a pure ConvNet
-    traced_vae_decoder = torch.jit.trace(
-        baseline_decoder, (sample_vae_decoder_inputs["z"].to(torch.float32), ))
+    traced_vae_decoder = torch.jit.trace(baseline_decoder, (sample_vae_decoder_inputs["z"].to(torch.float32), ))
 
     modify_coremltools_torch_frontend_badbmm()
         
@@ -748,14 +747,11 @@ def convert_vae_decoder(pipe, args):
 
     # Parity check PyTorch vs CoreML
     if args.check_output_correctness:
-        baseline_out = baseline_decoder(
-            z=sample_vae_decoder_inputs["z"].to(torch.float32)).numpy()
-        coreml_out = list(
-            coreml_vae_decoder.predict(
-                {k: v.numpy()
-                 for k, v in sample_vae_decoder_inputs.items()}).values())[0]
-        report_correctness(baseline_out, coreml_out,
-                           "vae_decoder baseline PyTorch to baseline CoreML")
+        baseline_out = baseline_decoder(z=sample_vae_decoder_inputs["z"].to(torch.float32)).numpy()
+        coreml_out = list(coreml_vae_decoder.predict({
+                k: v.numpy() for k, v in sample_vae_decoder_inputs.items()
+        }).values())[0]
+        report_correctness(baseline_out, coreml_out, "vae_decoder baseline PyTorch to baseline CoreML")
 
     del traced_vae_decoder, pipe.vae.decoder, coreml_vae_decoder
     gc.collect()
@@ -1004,9 +1000,8 @@ def convert_unet(pipe, args):
 
     # Check if Unet was previously exported and then chunked
     unet_chunks_exist = all(
-        os.path.exists(
-            out_path.replace(".mlpackage", f"_chunk{idx+1}.mlpackage"))
-        for idx in range(2))
+        os.path.exists(out_path.replace(".mlpackage", f"_chunk{idx+1}.mlpackage")) for idx in range(2)
+    )
 
     if args.chunk_unet and unet_chunks_exist:
         logger.info("`unet` chunks already exist, skipping conversion.")
@@ -1018,9 +1013,7 @@ def convert_unet(pipe, args):
     elif not os.path.exists(out_path):
         # Register the selected attention implementation globally
         unet.ATTENTION_IMPLEMENTATION_IN_EFFECT = unet.AttentionImplementations[args.attention_implementation]
-        logger.info(
-            f"Attention implementation in effect: {unet.ATTENTION_IMPLEMENTATION_IN_EFFECT}"
-        )
+        logger.info(f"Attention implementation in effect: {unet.ATTENTION_IMPLEMENTATION_IN_EFFECT}")
 
         # Prepare sample input shapes and values
         batch_size = 2  # for classifier-free guidance
