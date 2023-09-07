@@ -147,11 +147,7 @@ class ConverterProcess: ObservableObject {
             arguments.append("ORIGINAL")
         } else {
             arguments.append("--attention-implementation")
-            if #available(macOS 14.0, *) {
-                arguments.append("SPLIT_EINSUM_V2")
-            } else {
-                arguments.append("SPLIT_EINSUM")
-            }
+            arguments.append("SPLIT_EINSUM_V2")
         }
         
         if let embeddingsLocation {
