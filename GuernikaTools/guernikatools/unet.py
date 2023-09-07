@@ -966,7 +966,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
             down_block_res_samples += res_samples
         
         if down_block_res_samples_00 is not None:
-            down_block_additional_residuals = [
+            down_block_additional_residuals = (
                 down_block_res_samples_00,
                 down_block_res_samples_01,
                 down_block_res_samples_02,
@@ -979,7 +979,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
                 down_block_res_samples_09,
                 down_block_res_samples_10,
                 down_block_res_samples_11,
-            ]
+            )
             new_down_block_res_samples = ()
 
             for down_block_res_sample, down_block_additional_residual in zip(
