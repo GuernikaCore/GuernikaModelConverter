@@ -1327,13 +1327,15 @@ def convert_safety_checker(pipe, args):
         special_adjustment = special_adjustment.unsqueeze(1).expand(-1, cos_dist.shape[1])
 
         concept_scores = (cos_dist - self.concept_embeds_weights) + special_adjustment
-        has_nsfw_concepts = concept_scores.gt(0).float().sum(dim=1).gt(0)[:, None, None, None]
+        has_nsfw_concepts = concept_scores.gt(0).float().sum(dim=1).gt(0)
+        
+        # There is a problem when converting using multisize, for now the workaround is to not filter the images
+        # The swift implementations already filters the images checking `has_nsfw_concepts` so this should not have any impact
+        
+        #has_nsfw_concepts = concept_scores.gt(0).float().sum(dim=1).gt(0)[:, None, None, None]
 
-        has_nsfw_concepts_inds, _ = torch.broadcast_tensors(has_nsfw_concepts, images)
-        images[has_nsfw_concepts_inds] = 0.0  # black image
-
-#        has_nsfw_concepts = concept_scores.gt(0).float().sum(dim=1).gt(0).nonzero().flatten()
-#        images[has_nsfw_concepts] = 0.0  # black image
+        #has_nsfw_concepts_inds, _ = torch.broadcast_tensors(has_nsfw_concepts, images)
+        #images[has_nsfw_concepts_inds] = 0.0  # black image
 
         return images, has_nsfw_concepts.float(), concept_scores
 
@@ -1366,7 +1368,8 @@ def convert_safety_checker(pipe, args):
         concept_scores = (cos_dist - self.concept_embeds_weights) + special_adjustment
         has_nsfw_concepts = torch.any(concept_scores > 0, dim=1)
 
-        images[has_nsfw_concepts] = 0.0
+        # Don't make the images black as to align with the workaround in `forward_coreml`
+        #images[has_nsfw_concepts] = 0.0
 
         return images, has_nsfw_concepts, concept_scores
 
@@ -1386,28 +1389,27 @@ def convert_safety_checker(pipe, args):
     }
 
     # Convert safety_checker model to Core ML
-#    if args.multisize:
-#        clip_size = safety_checker_input.shape[2]
-#        clip_input_shape = ct.Shape(shape=(
-#            1,
-#            3,
-#            ct.RangeDim(int(clip_size * 0.5), upper_bound=int(clip_size * 1.5), default=clip_size),
-#            ct.RangeDim(int(clip_size * 0.5), upper_bound=int(clip_size * 1.5), default=clip_size)
-#        ))
-#        sample_size = args.output_h
-#        input_shape = ct.Shape(shape=(
-#            1,
-#            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 1.5), default=sample_size),
-#            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 1.5), default=sample_size),
-#            3
-#        ))
-#        
-#        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_safety_checker_inputs, {
-#            "clip_input": clip_input_shape, "images": input_shape
-#        }, args)
-#    else:
-#        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_safety_checker_inputs, None, args)
-    sample_coreml_inputs = _get_coreml_inputs(coreml_sample_safety_checker_inputs, None, args)
+    if args.multisize:
+        clip_size = safety_checker_input.shape[2]
+        clip_input_shape = ct.Shape(shape=(
+            1,
+            3,
+            ct.RangeDim(int(clip_size * 0.5), upper_bound=int(clip_size * 2), default=clip_size),
+            ct.RangeDim(int(clip_size * 0.5), upper_bound=int(clip_size * 2), default=clip_size)
+        ))
+        sample_size = args.output_h
+        input_shape = ct.Shape(shape=(
+            1,
+            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size),
+            ct.RangeDim(int(sample_size * 0.5), upper_bound=int(sample_size * 2), default=sample_size),
+            3
+        ))
+        
+        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_safety_checker_inputs, {
+            "clip_input": clip_input_shape, "images": input_shape
+        }, args)
+    else:
+        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_safety_checker_inputs, None, args)
     coreml_safety_checker, out_path = _convert_to_coreml(
         "safety_checker", traced_safety_checker,
         sample_coreml_inputs,
@@ -1448,13 +1450,9 @@ def convert_safety_checker(pipe, args):
     coreml_safety_checker.save(out_path)
 
     if args.check_output_correctness:
-        baseline_out = pipe.safety_checker(
-            **sample_safety_checker_inputs)[2].numpy()
-        coreml_out = coreml_safety_checker.predict(
-            coreml_sample_safety_checker_inputs)["concept_scores"]
-        report_correctness(
-            baseline_out, coreml_out,
-            "safety_checker baseline PyTorch to reference CoreML")
+        baseline_out = pipe.safety_checker(**sample_safety_checker_inputs)[2].numpy()
+        coreml_out = coreml_safety_checker.predict(coreml_sample_safety_checker_inputs)["concept_scores"]
+        report_correctness(baseline_out, coreml_out, "safety_checker baseline PyTorch to reference CoreML")
 
     del traced_safety_checker, coreml_safety_checker, pipe.safety_checker
     gc.collect()
