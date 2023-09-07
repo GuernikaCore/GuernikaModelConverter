@@ -14,7 +14,7 @@ import argparse
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 import coremltools as ct
-from diffusers import DiffusionPipeline, StableDiffusionPipeline, StableDiffusionXLPipeline
+from diffusers import DiffusionPipeline, StableDiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionInpaintPipeline
 from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, StableDiffusionXLControlNetPipeline, AutoencoderKL
 from diffusers.pipelines.stable_diffusion.convert_from_ckpt import download_from_original_stable_diffusion_ckpt
 import gc
@@ -1542,7 +1542,10 @@ def main(args):
             try:
                 pipe = StableDiffusionXLPipeline.from_single_file(args.model_checkpoint_location, local_files_only=True)
             except:
-                pipe = StableDiffusionPipeline.from_single_file(args.model_checkpoint_location, local_files_only=True)
+                try:
+                    pipe = StableDiffusionPipeline.from_single_file(args.model_checkpoint_location, local_files_only=True)
+                except:
+                    pipe = StableDiffusionInpaintPipeline.from_single_file(args.model_checkpoint_location, local_files_only=True)
         else:
             pipe = download_from_original_stable_diffusion_ckpt(
                 checkpoint_path=args.model_checkpoint_location,
