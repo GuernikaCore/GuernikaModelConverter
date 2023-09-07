@@ -1563,8 +1563,7 @@ def main(args):
             pipe.load_textual_inversion(file, local_files_only=True)
         args.added_vocab = pipe.tokenizer.get_added_vocab()
         logger.info(f"Added embeddings: {args.added_vocab}")
-        
-    args.multisize = False
+    
     args.model_is_sdxl = hasattr(pipe, "text_encoder_2") and pipe.text_encoder_2
     # auto apply fix if converting base SDXL
     if args.model_version == "stabilityai/stable-diffusion-xl-base-1.0":
@@ -1701,7 +1700,12 @@ def parser_spec():
                         choices=tuple(cu
                                       for cu in ct.ComputeUnit._member_names_),
                         default="ALL")
-
+    
+    parser.add_argument(
+        "--multisize",
+        action="store_true",
+        help="If `--multisize` the output model will support variable sizes from (output size*0.5) to (output size*2)",
+    )
     parser.add_argument(
         "--output-h",
         type=int,
