@@ -16,7 +16,7 @@ setup(
         "scipy",
         "numpy<1.24",
         "pytest",
-        "scikit-learn",
+        "scikit-learn==1.1.2",
         "pytorch_lightning",
         "OmegaConf",
         "six",
