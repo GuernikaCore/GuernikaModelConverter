@@ -18,6 +18,9 @@ struct ConvertControlNetView: View {
                 originPicker
                 computeUnitsPicker
                 customSizePicker
+                if #available(macOS 14.0, *) {
+                    compressionPicker
+                }
             }
         }
         .padding()
@@ -332,6 +335,29 @@ struct ConvertControlNetView: View {
         }
         .frame(maxWidth: 480)
         .disabled(model.computeUnits != .cpuAndGPU)
+    }
+    
+    @ViewBuilder
+    var compressionPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Compression")
+                .foregroundColor(.secondary)
+                .font(.headline)
+                .padding(.horizontal, 4)
+            Picker("", selection: $model.compression, content: {
+                ForEach(Compression.allCases) { units in
+                    Text(units.description)
+                        .tag(units)
+                }
+            })
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            Text("Compressing the output model reduces significantly the size while resulting in some detail loss.")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 5)
+        }
+        .frame(maxWidth: 480)
     }
     
     @ViewBuilder

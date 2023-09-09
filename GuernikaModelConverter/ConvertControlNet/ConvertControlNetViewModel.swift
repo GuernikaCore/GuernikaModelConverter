@@ -57,6 +57,12 @@ class ConvertControlNetViewModel: ObservableObject {
     }
     @AppStorage("compute_units") var computeUnitsString: String = ComputeUnits.cpuAndNeuralEngine.rawValue
     
+    var compression: Compression {
+        get { Compression(rawValue: compressionString) ?? .fullSize }
+        set { compressionString = newValue.rawValue }
+    }
+    @AppStorage("controlnet_compression") var compressionString: String = Compression.fullSize.rawValue
+    
     @AppStorage("custom_size") var customSize: Bool = false
     @AppStorage("custom_size_width") var customWidth: Int = 512
     @AppStorage("custom_size_height") var customHeight: Int = 512
@@ -77,8 +83,9 @@ class ConvertControlNetViewModel: ObservableObject {
                 diffusersLocation: diffusersLocation,
                 checkpointLocation: checkpointLocation,
                 computeUnits: computeUnits,
-                customWidth: customSize && computeUnits == .cpuAndGPU ? customWidth : nil,
-                customHeight: customSize && computeUnits == .cpuAndGPU ? customHeight : nil
+                customWidth: customSize && !multisize && computeUnits == .cpuAndGPU ? customWidth : nil,
+                customHeight: customSize && !multisize && computeUnits == .cpuAndGPU ? customHeight : nil,
+                compression: compression
             )
             process.objectWillChange
                 .receive(on: DispatchQueue.main)

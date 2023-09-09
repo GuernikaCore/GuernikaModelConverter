@@ -253,12 +253,13 @@ class ConverterProcess: ObservableObject {
         checkpointLocation: URL?,
         computeUnits: ComputeUnits,
         customWidth: Int?,
-        customHeight: Int?
+        customHeight: Int?,
+        compression: Compression
     ) throws {
         guard let outputLocation else {
             throw ArgumentError.noOutputLocation
         }
-        let steps: [Step] = [.initialize, .convertControlNet, .cleanUp]
+        var steps: [Step] = [.initialize, .convertControlNet]
         var arguments: [String] = [
             "-o", outputLocation.path(percentEncoded: false),
             "--bundle-resources-for-guernika",
@@ -314,6 +315,21 @@ class ConverterProcess: ObservableObject {
             arguments.append(String(describing: customHeight))
         }
         
+        if #available(macOS 14.0, *) {
+            switch compression {
+            case .quantizied6bit:
+                arguments.append("--quantize-nbits")
+                arguments.append("6")
+                steps.append(.compressOutput)
+            case .quantizied8bit:
+                arguments.append("--quantize-nbits")
+                arguments.append("8")
+                steps.append(.compressOutput)
+            case .fullSize:
+                break
+            }
+        }
+        
         let process = Process()
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -324,6 +340,7 @@ class ConverterProcess: ObservableObject {
         print("Arguments", arguments)
         process.arguments = arguments
         self.process = process
+        steps.append(.cleanUp)
         self.steps = steps
         
         pipe.fileHandleForReading.readabilityHandler = { handle in
