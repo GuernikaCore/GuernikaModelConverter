@@ -786,11 +786,6 @@ def convert_controlnet(pipe, args):
     height = int(args.output_h / vae_scale_factor)
     width = int(args.output_w / vae_scale_factor)
     
-    # if using variable size shapes, take the biggest as base
-    if args.multisize and height != width:
-        height = max(height, width)
-        width = height
-    
     sample_shape = (
         batch_size,                    # B
         controlnet_in_channels,  # C
@@ -1024,11 +1019,6 @@ def convert_unet(pipe, args):
         vae_scale_factor = 2 ** (len(pipe.vae.config.block_out_channels) - 1)
         height = int(args.output_h / vae_scale_factor)
         width = int(args.output_w / vae_scale_factor)
-        
-        # if using variable size shapes, take the biggest as base
-        if args.multisize and height != width:
-            height = max(height, width)
-            width = height
         
         sample_shape = (
             batch_size,                    # B
@@ -1468,8 +1458,17 @@ def check_output_size(pipe, args):
         args.output_h = pipe.unet.config.sample_size * vae_scale_factor
     if not args.output_w:
         args.output_w = pipe.unet.config.sample_size * vae_scale_factor
-    
-    logger.info(f"Output size will be {args.output_w}x{args.output_h}")
+            
+    # if using variable size shapes, take the biggest as base
+    if args.multisize:
+        if args.output_h != args.output_w:
+            args.output_h = max(args.output_h, args.output_w)
+            args.output_w = args.output_h
+        args.min_output_size = int(args.output_w*0.5)
+        args.max_output_size = int(args.output_w*2)
+        logger.info(f"Output size will range from {args.min_output_size}x{args.min_output_size} to {args.max_output_size}x{args.max_output_size}")
+    else:
+        logger.info(f"Output size will be {args.output_w}x{args.output_h}")
 
 def main(args):
     os.makedirs(args.o, exist_ok=True)
