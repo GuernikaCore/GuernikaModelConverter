@@ -351,7 +351,7 @@ class ConverterProcess: ObservableObject {
                     currentProgress = StepProgress(
                         step: String(newLine.split(separator: ":")[0]),
                         etaString: etaString,
-                        percentage: Float(percentage)
+                        percentage: Float(percentage) / 100
                     )
                 } else {
                     currentProgress = nil
