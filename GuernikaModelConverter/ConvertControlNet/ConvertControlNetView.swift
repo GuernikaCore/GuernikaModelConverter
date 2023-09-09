@@ -319,8 +319,19 @@ struct ConvertControlNetView: View {
                 Toggle("Custom size", isOn: $model.customSize)
                     .font(.headline)
                     .padding(.horizontal, 4)
+                    .disabled(model.multisize)
+                if #available(macOS 14.0, *) {
+                    Toggle("Variable size", isOn: $model.multisize)
+                        .font(.headline)
+                        .padding(.horizontal, 4)
+                }
                 if model.computeUnits != .cpuAndGPU {
                     Label("Only available when using\nCPU and GPU compute units", systemImage: "exclamationmark.triangle")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 5)
+                } else if model.multisize, #available(macOS 14.0, *) {
+                    Label("Variable size allows the ControlNet to work with multiple sizes.\nOnly available on macOS 14, currently in beta.", systemImage: "exclamationmark.triangle")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 5)
@@ -330,7 +341,7 @@ struct ConvertControlNetView: View {
             VStack {
                 LabeledIntegerField("Width", value: $model.customWidth, step: 8, minValue: 128)
                 LabeledIntegerField("Height", value: $model.customHeight, step: 8, minValue: 128)
-            }.disabled(!model.customSize)
+            }.disabled(!model.customSize || model.multisize)
                 .foregroundColor(model.customSize ? nil : .secondary)
         }
         .frame(maxWidth: 480)

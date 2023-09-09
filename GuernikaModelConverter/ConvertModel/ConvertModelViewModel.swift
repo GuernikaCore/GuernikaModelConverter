@@ -68,6 +68,7 @@ class ConvertModelViewModel: ObservableObject {
     @AppStorage("custom_size") var customSize: Bool = false
     @AppStorage("custom_size_width") var customWidth: Int = 512
     @AppStorage("custom_size_height") var customHeight: Int = 512
+    @AppStorage("multisize") var multisize: Bool = false
     
     @AppStorage("convert_unet") var convertUnet: Bool = true
     @AppStorage("chunk_unet") var chunkUnet: Bool = false
@@ -97,11 +98,12 @@ class ConvertModelViewModel: ObservableObject {
                 diffusersLocation: diffusersLocation,
                 checkpointLocation: checkpointLocation,
                 computeUnits: computeUnits,
-                customWidth: customSize && computeUnits == .cpuAndGPU ? customWidth : nil,
-                customHeight: customSize && computeUnits == .cpuAndGPU ? customHeight : nil,
+                customWidth: customSize && !multisize && computeUnits == .cpuAndGPU ? customWidth : nil,
+                customHeight: customSize && !multisize && computeUnits == .cpuAndGPU ? customHeight : nil,
+                multisize: multisize && computeUnits == .cpuAndGPU,
                 convertUnet: convertUnet,
                 chunkUnet: chunkUnet,
-                controlNetSupport: controlNetSupport,
+                controlNetSupport: controlNetSupport && !multisize, // TODO: Currently not possible to have both
                 convertTextEncoder: convertTextEncoder,
                 embeddingsLocation: loadEmbeddings ? embeddingsLocation : nil,
                 convertVaeEncoder: convertVaeEncoder,

@@ -66,6 +66,7 @@ class ConvertControlNetViewModel: ObservableObject {
     @AppStorage("custom_size") var customSize: Bool = false
     @AppStorage("custom_size_width") var customWidth: Int = 512
     @AppStorage("custom_size_height") var customHeight: Int = 512
+    @AppStorage("controlnet_multisize") var multisize: Bool = false
     
     private var cancellables: Set<AnyCancellable> = []
     
@@ -85,6 +86,7 @@ class ConvertControlNetViewModel: ObservableObject {
                 computeUnits: computeUnits,
                 customWidth: customSize && !multisize && computeUnits == .cpuAndGPU ? customWidth : nil,
                 customHeight: customSize && !multisize && computeUnits == .cpuAndGPU ? customHeight : nil,
+                multisize: multisize && computeUnits == .cpuAndGPU,
                 compression: compression
             )
             process.objectWillChange

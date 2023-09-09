@@ -88,6 +88,7 @@ class ConverterProcess: ObservableObject {
         computeUnits: ComputeUnits,
         customWidth: Int?,
         customHeight: Int?,
+        multisize: Bool,
         convertUnet: Bool,
         chunkUnet: Bool,
         controlNetSupport: Bool,
@@ -221,6 +222,9 @@ class ConverterProcess: ObservableObject {
             arguments.append("--output-h")
             arguments.append(String(describing: customHeight))
         }
+        if multisize {
+            arguments.append("--multisize")
+        }
         
         let process = Process()
         let pipe = Pipe()
@@ -254,6 +258,7 @@ class ConverterProcess: ObservableObject {
         computeUnits: ComputeUnits,
         customWidth: Int?,
         customHeight: Int?,
+        multisize: Bool,
         compression: Compression
     ) throws {
         guard let outputLocation else {
@@ -313,6 +318,9 @@ class ConverterProcess: ObservableObject {
         if let customHeight {
             arguments.append("--output-h")
             arguments.append(String(describing: customHeight))
+        }
+        if multisize {
+            arguments.append("--multisize")
         }
         
         if #available(macOS 14.0, *) {
