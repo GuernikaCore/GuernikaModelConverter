@@ -317,12 +317,18 @@ class CrossAttnDownBlock2D(nn.Module):
         else:
             self.downsamplers = None
 
-    def forward(self, hidden_states, temb=None, encoder_hidden_states=None):
+    def forward(self, hidden_states, temb=None, encoder_hidden_states=None, additional_residuals=None):
         output_states = ()
-
-        for resnet, attn in zip(self.resnets, self.attentions):
+        
+        blocks = list(zip(self.resnets, self.attentions))
+        for i, (resnet, attn) in enumerate(blocks):
             hidden_states = resnet(hidden_states, temb)
             hidden_states = attn(hidden_states, context=encoder_hidden_states)
+
+            # apply additional residuals to the output of the last pair of resnet and attention blocks
+            if i == len(blocks) - 1 and additional_residuals is not None:
+                hidden_states = hidden_states + additional_residuals
+            
             output_states += (hidden_states, )
 
         if self.downsamplers is not None:
@@ -917,6 +923,10 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
         encoder_hidden_states,
         text_embeds=None,
         time_ids=None,
+        adapter_res_samples_00=None,
+        adapter_res_samples_01=None,
+        adapter_res_samples_02=None,
+        adapter_res_samples_03=None,
         down_block_res_samples_00=None,
         down_block_res_samples_01=None,
         down_block_res_samples_02=None,
@@ -952,20 +962,38 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
         sample = self.conv_in(sample)
 
         # 3. down
+        is_adapter = adapter_res_samples_00 is not None
+        is_controlnet = mid_block_res_sample is not None and down_block_res_samples_00 is not None
+        adapter_residuals = [
+            adapter_res_samples_00,
+            adapter_res_samples_01,
+            adapter_res_samples_02,
+            adapter_res_samples_03
+        ]
+        
         down_block_res_samples = (sample, )
         for downsample_block in self.down_blocks:
             if hasattr(downsample_block, "attentions") and downsample_block.attentions is not None:
+                # For t2i-adapter CrossAttnDownBlock2D
+                additional_residuals = None
+                if is_adapter and len(adapter_residuals) > 0:
+                    additional_residuals = adapter_residuals.pop(0)
+
                 sample, res_samples = downsample_block(
                     hidden_states=sample,
                     temb=emb,
-                    encoder_hidden_states=encoder_hidden_states
+                    encoder_hidden_states=encoder_hidden_states,
+                    additional_residuals=additional_residuals,
                 )
             else:
                 sample, res_samples = downsample_block(hidden_states=sample, temb=emb)
 
+                if is_adapter and len(adapter_residuals) > 0:
+                    sample += adapter_residuals.pop(0)
+
             down_block_res_samples += res_samples
         
-        if down_block_res_samples_00 is not None:
+        if is_controlnet:
             down_block_additional_residuals = (
                 down_block_res_samples_00,
                 down_block_res_samples_01,
@@ -997,7 +1025,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
             encoder_hidden_states=encoder_hidden_states
         )
         
-        if mid_block_res_sample is not None:
+        if is_controlnet:
             sample += mid_block_res_sample
 
         # 5. up

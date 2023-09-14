@@ -14,7 +14,8 @@ import argparse
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 import coremltools as ct
-from diffusers import DiffusionPipeline, StableDiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionInpaintPipeline
+from diffusers import DiffusionPipeline, StableDiffusionPipeline, StableDiffusionXLPipeline, AutoPipelineForInpainting
+from diffusers import T2IAdapter, StableDiffusionAdapterPipeline
 from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, StableDiffusionXLControlNetPipeline, AutoencoderKL
 from diffusers.pipelines.stable_diffusion.convert_from_ckpt import download_from_original_stable_diffusion_ckpt
 import gc
@@ -146,9 +147,9 @@ def _convert_to_coreml(submodule_name, torchscript_module, coreml_inputs,
 def quantize_weights(args):
     """ Quantize weights to args.quantize_nbits using a palette (look-up table)
     """
-    models_to_quantize = ["text_encoder", "text_encoder_2", "vae_encoder", "vae_decoder", "unet", "unet_chunk1", "unet_chunk2", "controlnet"]
+    models_to_quantize = ["text_encoder", "text_encoder_2", "vae_encoder", "vae_decoder", "unet", "unet_chunk1", "unet_chunk2", "t2i_adapter", "controlnet"]
     if args.chunk_unet:
-        models_to_quantize = ["text_encoder", "text_encoder_2", "vae_encoder", "vae_decoder", "unet_chunk1", "unet_chunk2", "controlnet"]
+        models_to_quantize = ["text_encoder", "text_encoder_2", "vae_encoder", "vae_decoder", "unet_chunk1", "unet_chunk2", "t2i_adapter", "controlnet"]
     for model_name in models_to_quantize:
         logger.info(f"Quantizing {model_name} to {args.quantize_nbits}-bit precision")
         out_path = _get_out_path(args, model_name)
@@ -236,6 +237,7 @@ def bundle_resources_for_guernika(pipe, args):
                                      ("text_encoder_2", "TextEncoder2"),
                                      ("vae_encoder", "VAEEncoder"),
                                      ("vae_decoder", "VAEDecoder"),
+                                     ("t2i_adapter", "T2IAdapter"),
                                      ("controlnet", "ControlNet"),
                                      ("unet", "Unet"),
                                      ("unet_chunk1", "UnetChunk1"),
@@ -271,7 +273,7 @@ def bundle_resources_for_guernika(pipe, args):
 
 import traceback
 def remove_mlpackages(args):
-    for package_name in ["text_encoder", "text_encoder_2", "vae_encoder", "vae_decoder", "controlnet", "unet", "unet_chunk1", "unet_chunk2", "safety_checker"]:
+    for package_name in ["text_encoder", "text_encoder_2", "vae_encoder", "vae_decoder", "t2i_adapter", "controlnet", "unet", "unet_chunk1", "unet_chunk2", "safety_checker"]:
         package_path = _get_out_path(args, package_name)
         try:
             if os.path.exists(package_path):
@@ -757,6 +759,141 @@ def convert_vae_decoder(pipe, args):
     gc.collect()
 
 
+def convert_t2i_adapter(base_adapter, args):
+    """ Converts a T2IAdapter
+    """
+    out_path = _get_out_path(args, "t2i_adapter")
+    if os.path.exists(out_path):
+        logger.info(
+            f"`t2i_adapter` already exists at {out_path}, skipping conversion."
+        )
+        return
+
+    # Register the selected attention implementation globally
+    unet.ATTENTION_IMPLEMENTATION_IN_EFFECT = unet.AttentionImplementations[args.attention_implementation]
+    logger.info(
+        f"Attention implementation in effect: {unet.ATTENTION_IMPLEMENTATION_IN_EFFECT}"
+    )
+
+    # Prepare sample input shapes and values
+    batch_size = 2  # for classifier-free guidance
+    adapter_type = base_adapter.config.adapter_type
+    adapter_in_channels = base_adapter.config.in_channels
+#    vae_scale_factor = 2 ** (len(pipe.vae.config.block_out_channels) - 1)
+    
+    input_shape = (
+        1,                    # B
+        adapter_in_channels,  # C
+        args.output_h,  # H
+        args.output_w,  # W
+    )
+    
+    sample_adapter_inputs = {
+        "input": torch.rand(*input_shape, dtype=torch.float16)
+    }
+    sample_adapter_inputs_spec = {
+        k: (v.shape, v.dtype)
+        for k, v in sample_adapter_inputs.items()
+    }
+    logger.info(f"Sample inputs spec: {sample_adapter_inputs_spec}")
+
+    # Initialize reference adapter
+    reference_adapter = T2IAdapter(**base_adapter.config).eval()
+    load_state_dict_summary = reference_adapter.load_state_dict(base_adapter.state_dict())
+
+    # Prepare inputs
+    baseline_sample_adapter_inputs = deepcopy(sample_adapter_inputs)
+
+    # JIT trace
+    logger.info("JIT tracing..")
+    reference_adapter = torch.jit.trace(reference_adapter, (sample_adapter_inputs["input"].to(torch.float32), ))
+    logger.info("Done.")
+
+    if args.check_output_correctness:
+        baseline_out = base_adapter(**baseline_sample_adapter_inputs, return_dict=False)[0].numpy()
+        reference_out = reference_adapter(**sample_adapter_inputs)[0].numpy()
+        report_correctness(baseline_out, reference_out,  "control baseline to reference PyTorch")
+
+    del base_adapter
+    gc.collect()
+
+    coreml_sample_adapter_inputs = {
+        k: v.numpy().astype(np.float16)
+        for k, v in sample_adapter_inputs.items()
+    }
+    
+    if args.multisize:
+        input_size = args.output_h
+        input_shape = ct.Shape(shape=(
+            1,
+            adapter_in_channels,
+            ct.RangeDim(int(input_size * 0.5), upper_bound=int(input_size * 2), default=input_size),
+            ct.RangeDim(int(input_size * 0.5), upper_bound=int(input_size * 2), default=input_size)
+        ))
+        
+        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_adapter_inputs, {
+            "input": input_shape
+        }, args)
+    else:
+        sample_coreml_inputs = _get_coreml_inputs(coreml_sample_adapter_inputs, None, args)
+    output_names = [
+        "adapter_res_samples_00", "adapter_res_samples_01",
+        "adapter_res_samples_02", "adapter_res_samples_03"
+    ]
+    coreml_adapter, out_path = _convert_to_coreml(
+        "t2i_adapter",
+        reference_adapter,
+        sample_coreml_inputs,
+        output_names,
+        args.precision_full,
+        args
+    )
+    del reference_adapter
+    gc.collect()
+
+    # Set model metadata
+    coreml_adapter.author = f"Please refer to the Model Card available at huggingface.co/{args.model_version}"
+    coreml_adapter.license = "T2IAdapter (https://github.com/TencentARC/T2I-Adapter)"
+    coreml_adapter.version = args.t2i_adapter_version
+    coreml_adapter.short_description = \
+        "T2IAdapter is a neural network structure to control diffusion models by adding extra conditions. " \
+        "Please refer to https://github.com/TencentARC/T2I-Adapter for details."
+
+    # Set the input descriptions
+    coreml_adapter.input_description["input"] = "Image used to condition adapter output"
+
+    # Set the output descriptions
+    coreml_adapter.output_description["adapter_res_samples_00"] = \
+        "Residual down sample from T2IAdapter"
+    coreml_adapter.output_description["adapter_res_samples_01"] = \
+        "Residual down sample from T2IAdapter"
+    coreml_adapter.output_description["adapter_res_samples_02"] = \
+        "Residual down sample from T2IAdapter"
+    coreml_adapter.output_description["adapter_res_samples_03"] = \
+        "Residual down sample from T2IAdapter"
+    
+    # Set package version metadata
+    coreml_adapter.user_defined_metadata["identifier"] = args.t2i_adapter_version
+    coreml_adapter.user_defined_metadata["converter_version"] = __version__
+    coreml_adapter.user_defined_metadata["attention_implementation"] = args.attention_implementation
+    coreml_adapter.user_defined_metadata["compute_unit"] = args.compute_unit
+    coreml_adapter.user_defined_metadata["adapter_type"] = adapter_type
+    adapter_method = controlnet_method_from(args.t2i_adapter_version)
+    if adapter_method:
+        coreml_adapter.user_defined_metadata["method"] = adapter_method
+    
+        coreml_adapter.save(out_path)
+    logger.info(f"Saved adapter into {out_path}")
+
+    # Parity check PyTorch vs CoreML
+    if args.check_output_correctness:
+        coreml_out = list(coreml_adapter.predict(coreml_sample_adapter_inputs).values())[0]
+        report_correctness(baseline_out, coreml_out, "control baseline PyTorch to reference CoreML")
+
+    del coreml_adapter
+    gc.collect()
+
+
 def convert_controlnet(pipe, args):
     """ Converts the ControlNet component of Stable Diffusion
     """
@@ -938,6 +1075,8 @@ def convert_controlnet(pipe, args):
         "Image used to condition ControlNet output"
 
     # Set the output descriptions
+    coreml_controlnet.output_description["down_block_res_samples_00"] = \
+        "Residual down sample from ControlNet"
     coreml_controlnet.output_description["down_block_res_samples_01"] = \
         "Residual down sample from ControlNet"
     coreml_controlnet.output_description["down_block_res_samples_02"] = \
@@ -1037,10 +1176,10 @@ def convert_unet(pipe, args):
                 "convert_text_encoder() deletes pipe.text_encoder to save RAM. "
                 "Please use convert_unet() before convert_text_encoder()")
 
-        hidden_size = pipe.unet.config.cross_attention_dim
+        args.hidden_size = pipe.unet.config.cross_attention_dim
         encoder_hidden_states_shape = (
             batch_size,
-            hidden_size,
+            args.hidden_size,
             1,
             max_position_embeddings,
         )
@@ -1057,7 +1196,7 @@ def convert_unet(pipe, args):
             ("encoder_hidden_states", torch.rand(*encoder_hidden_states_shape)),
         ]
         
-        requires_aesthetics_score = False
+        args.requires_aesthetics_score = False
         if hasattr(pipe.unet.config, "addition_embed_type") and pipe.unet.config.addition_embed_type == "text_time":
             text_embeds_shape = (
                 batch_size,
@@ -1065,7 +1204,7 @@ def convert_unet(pipe, args):
             )
             time_ids_input = None
             if hasattr(pipe.config, "requires_aesthetics_score") and pipe.config.requires_aesthetics_score:
-                requires_aesthetics_score = True
+                args.requires_aesthetics_score = True
                 time_ids_input = [
                     [args.output_h, args.output_w, 0, 0, 2.5],
                     [args.output_h, args.output_w, 0, 0, 6]
@@ -1115,6 +1254,24 @@ def convert_unet(pipe, args):
                 ("mid_block_res_sample", torch.rand(2, output_channel, cn_height, cn_width))
             ]
         
+        if args.t2i_adapter_support:
+            block_out_channels = pipe.unet.config.block_out_channels
+            
+            if args.model_is_sdxl:
+                t2ia_height = int(height / 2)
+                t2ia_width = int(width / 2)
+            else:
+                t2ia_height = height
+                t2ia_width = width
+            
+            for i, output_channel in enumerate(block_out_channels):
+                sample_unet_inputs = sample_unet_inputs + [
+                    (f"adapter_res_samples_{i:02}", torch.rand(2,  output_channel, t2ia_height, t2ia_width)),
+                ]
+                if not args.model_is_sdxl or i == 1:
+                    t2ia_height = int(t2ia_height / 2)
+                    t2ia_width = int(t2ia_width / 2)
+        
         multisize_inputs = None
         if args.multisize:
             sample_size = height
@@ -1126,7 +1283,7 @@ def convert_unet(pipe, args):
             ))
             multisize_inputs = {"sample": input_shape}
             for k, v in sample_unet_inputs:
-                if "block_res" in k:
+                if "res_sample" in k:
                     v_height = v.shape[2]
                     v_width = v.shape[3]
                     multisize_inputs[k] = ct.Shape(shape=(
@@ -1186,50 +1343,7 @@ def convert_unet(pipe, args):
         del reference_unet
         gc.collect()
 
-        # Set model metadata
-        coreml_unet.author = f"Please refer to the Model Card available at huggingface.co/{args.model_version}"
-        coreml_unet.license = "OpenRAIL (https://huggingface.co/spaces/CompVis/stable-diffusion-license)"
-        coreml_unet.version = args.model_version
-        coreml_unet.short_description = \
-            "Stable Diffusion generates images conditioned on text or other images as input through the diffusion process. " \
-            "Please refer to https://arxiv.org/abs/2112.10752 for details."
-
-        # Set the input descriptions
-        coreml_unet.input_description["sample"] = \
-            "The low resolution latent feature maps being denoised through reverse diffusion"
-        coreml_unet.input_description["timestep"] = \
-            "A value emitted by the associated scheduler object to condition the model on a given noise schedule"
-        coreml_unet.input_description["encoder_hidden_states"] = \
-            "Output embeddings from the associated text_encoder model to condition to generated image on text. " \
-            "A maximum of 77 tokens (~40 words) are allowed. Longer text is truncated. " \
-            "Shorter text does not reduce computation."
-        if hasattr(pipe, "text_encoder_2") and pipe.text_encoder_2:
-            coreml_unet.input_description["text_embeds"] = \
-                ""
-            coreml_unet.input_description["time_ids"] = \
-                ""
-        if args.controlnet_support:
-            coreml_unet.input_description["down_block_res_samples_00"] = \
-                "Optional: Residual down sample from ControlNet"
-            coreml_unet.input_description["mid_block_res_sample"] = \
-                "Optional: Residual mid sample from ControlNet"
-
-        # Set the output descriptions
-        coreml_unet.output_description["noise_pred"] = \
-            "Same shape and dtype as the `sample` input. " \
-            "The predicted noise to facilitate the reverse diffusion (denoising) process"
-            
-        # Set package version metadata
-        coreml_unet.user_defined_metadata["identifier"] = args.model_version
-        coreml_unet.user_defined_metadata["converter_version"] = __version__
-        coreml_unet.user_defined_metadata["attention_implementation"] = args.attention_implementation
-        coreml_unet.user_defined_metadata["compute_unit"] = args.compute_unit
-        coreml_unet.user_defined_metadata["prediction_type"] = pipe.scheduler.config.prediction_type
-        coreml_unet.user_defined_metadata["hidden_size"] = str(hidden_size)
-        if requires_aesthetics_score:
-            coreml_unet.user_defined_metadata["requires_aesthetics_score"] = "true"
-         
-        coreml_unet.save(out_path)
+        update_coreml_unet(pipe, coreml_unet, out_path, args)
         logger.info(f"Saved unet into {out_path}")
 
         # Parity check PyTorch vs CoreML
@@ -1240,7 +1354,15 @@ def convert_unet(pipe, args):
         del coreml_unet
         gc.collect()
     else:
-        del pipe.unet
+        args.hidden_size = pipe.unet.config.cross_attention_dim
+        args.requires_aesthetics_score = False
+        if hasattr(pipe.unet.config, "addition_embed_type") and pipe.unet.config.addition_embed_type == "text_time":
+            if hasattr(pipe.config, "requires_aesthetics_score") and pipe.config.requires_aesthetics_score:
+                args.requires_aesthetics_score = True
+        coreml_unet = ct.models.MLModel(out_path)
+        update_coreml_unet(pipe, coreml_unet, out_path, args)
+        
+        del pipe.unet, coreml_unet
         gc.collect()
         logger.info(f"`unet` already exists at {out_path}, skipping conversion.")
 
@@ -1249,6 +1371,58 @@ def convert_unet(pipe, args):
         args.mlpackage_path = out_path
         args.remove_original = False
         chunk_mlprogram.main(args)
+        
+def update_coreml_unet(pipe, coreml_unet, out_path, args):
+    # make ControlNet/T2IAdapter inputs optional
+    coreml_spec = coreml_unet.get_spec()
+    print(f"coreml_spec {coreml_spec.description.input}")
+    for index, input_spec in enumerate(coreml_spec.description.input):
+        if "res_sample" in input_spec.name:
+            coreml_spec.description.input[index].type.isOptional = True
+    coreml_unet = ct.models.MLModel(coreml_spec, skip_model_load=True, weights_dir=coreml_unet.weights_dir)
+    
+    # Set model metadata
+    coreml_unet.author = f"Please refer to the Model Card available at huggingface.co/{args.model_version}"
+    coreml_unet.license = "OpenRAIL (https://huggingface.co/spaces/CompVis/stable-diffusion-license)"
+    coreml_unet.version = args.model_version
+    coreml_unet.short_description = \
+        "Stable Diffusion generates images conditioned on text or other images as input through the diffusion process. " \
+        "Please refer to https://arxiv.org/abs/2112.10752 for details."
+
+    # Set the input descriptions
+    coreml_unet.input_description["sample"] = \
+        "The low resolution latent feature maps being denoised through reverse diffusion"
+    coreml_unet.input_description["timestep"] = \
+        "A value emitted by the associated scheduler object to condition the model on a given noise schedule"
+    coreml_unet.input_description["encoder_hidden_states"] = \
+        "Output embeddings from the associated text_encoder model to condition to generated image on text. " \
+        "A maximum of 77 tokens (~40 words) are allowed. Longer text is truncated. " \
+        "Shorter text does not reduce computation."
+    if hasattr(pipe, "text_encoder_2") and pipe.text_encoder_2:
+        coreml_unet.input_description["text_embeds"] = ""
+        coreml_unet.input_description["time_ids"] = ""
+    if args.t2i_adapter_support:
+        coreml_unet.input_description["adapter_res_samples_00"] = "Optional: Residual down sample from T2IAdapter"
+    if args.controlnet_support:
+        coreml_unet.input_description["down_block_res_samples_00"] = "Optional: Residual down sample from ControlNet"
+        coreml_unet.input_description["mid_block_res_sample"] = "Optional: Residual mid sample from ControlNet"
+
+    # Set the output descriptions
+    coreml_unet.output_description["noise_pred"] = \
+        "Same shape and dtype as the `sample` input. " \
+        "The predicted noise to facilitate the reverse diffusion (denoising) process"
+        
+    # Set package version metadata
+    coreml_unet.user_defined_metadata["identifier"] = args.model_version
+    coreml_unet.user_defined_metadata["converter_version"] = __version__
+    coreml_unet.user_defined_metadata["attention_implementation"] = args.attention_implementation
+    coreml_unet.user_defined_metadata["compute_unit"] = args.compute_unit
+    coreml_unet.user_defined_metadata["prediction_type"] = pipe.scheduler.config.prediction_type
+    coreml_unet.user_defined_metadata["hidden_size"] = str(args.hidden_size)
+    if args.requires_aesthetics_score:
+        coreml_unet.user_defined_metadata["requires_aesthetics_score"] = "true"
+    
+    coreml_unet.save(out_path)
 
 
 def convert_safety_checker(pipe, args):
@@ -1473,6 +1647,11 @@ def check_output_size(pipe, args):
 def main(args):
     os.makedirs(args.o, exist_ok=True)
     
+    base_adapter = None
+    if args.t2i_adapter_version:
+        logger.info(f"Initializing T2IAdapter with {args.t2i_adapter_version}..")
+        base_adapter = T2IAdapter.from_pretrained(args.t2i_adapter_version, use_auth_token=True)
+    
     controlnet = None
     if args.controlnet_location:
         logger.info(f"Initializing ControlNet from {args.controlnet_location}..")
@@ -1535,7 +1714,7 @@ def main(args):
                 try:
                     pipe = StableDiffusionPipeline.from_single_file(args.model_checkpoint_location, local_files_only=True)
                 except:
-                    pipe = StableDiffusionInpaintPipeline.from_single_file(args.model_checkpoint_location, local_files_only=True)
+                    pipe = AutoPipelineForInpainting.from_single_file(args.model_checkpoint_location, local_files_only=True)
         else:
             pipe = download_from_original_stable_diffusion_ckpt(
                 checkpoint_path=args.model_checkpoint_location,
@@ -1582,7 +1761,12 @@ def main(args):
     check_output_size(pipe, args)
     
     # Convert models
-    if controlnet:
+    if base_adapter is not None:
+        logger.info("Converting t2i_adapter")
+        convert_t2i_adapter(base_adapter, args)
+        logger.info("Converted t2i_adapter")
+    
+    if controlnet is not None:
         logger.info("Converting controlnet")
         convert_controlnet(pipe, args)
         logger.info("Converted controlnet")
@@ -1675,6 +1859,18 @@ def parser_spec():
         help="The YAML config file corresponding to the original architecture of the CKPT.",
     )
     parser.add_argument(
+        "--t2i-adapter-support",
+        action="store_true",
+        help="If `--t2i-adapter-support` the output model will support T2IAdapter.",
+    )
+    parser.add_argument(
+        "--t2i-adapter-version",
+        default=None,
+        help=
+        ("The pre-trained model checkpoint and configuration to restore. "
+         "For available versions: https://huggingface.co/models?search=adapter"
+         ))
+    parser.add_argument(
         "--controlnet-support",
         action="store_true",
         help="If `--controlnet-support` the output model will support ControlNet.",
@@ -1690,7 +1886,7 @@ def parser_spec():
         "--controlnet-location",
         default=None,
         help=
-        "The local pre-trained ControlNEt checkpoint and configuration to restore."
+        "The local pre-trained ControlNet checkpoint and configuration to restore."
     )
     parser.add_argument(
         "--controlnet-checkpoint-location", default=None, type=str, help="Path to the checkpoint to convert."
