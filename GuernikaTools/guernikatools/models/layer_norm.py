@@ -63,13 +63,13 @@ class LayerNormANE(nn.Module):
         if self.clip_mag is not None:
             inputs.clamp_(-self.clip_mag, self.clip_mag)
 
-        channels_mean = inputs.mean(dim=1, keepdims=True)
+        channels_mean = inputs.mean(dim=1, keepdim=True)
 
         zero_mean = inputs - channels_mean
 
         zero_mean_sq = zero_mean * zero_mean
 
-        denom = (zero_mean_sq.mean(dim=1, keepdims=True) + self.eps).rsqrt()
+        denom = (zero_mean_sq.mean(dim=1, keepdim=True) + self.eps).rsqrt()
 
         out = zero_mean * denom
 

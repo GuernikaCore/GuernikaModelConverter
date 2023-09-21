@@ -3,13 +3,11 @@
 # Copyright (C) 2022 Apple Inc. All Rights Reserved.
 #
 
-from guernikatools import attention
-from guernikatools.layer_norm import LayerNormANE
+from .attention import Attention
+from .layer_norm import LayerNormANE
 
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers import ModelMixin
-
-from enum import Enum
 
 import logging
 
@@ -22,91 +20,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Ensure minimum macOS version requirement is met for this particular model
-from coremltools.models.utils import _macos_version
-if not _macos_version() >= (13, 1):
-    logger.warning(
-        "!!! macOS 13.1 and newer or iOS/iPadOS 16.2 and newer is required for best performance !!!"
-    )
 
-
-class AttentionImplementations(Enum):
-    ORIGINAL = "ORIGINAL"
-    SPLIT_EINSUM = "SPLIT_EINSUM"
-    SPLIT_EINSUM_V2 = "SPLIT_EINSUM_V2"
-
-
-ATTENTION_IMPLEMENTATION_IN_EFFECT = AttentionImplementations.SPLIT_EINSUM
-
-WARN_MSG = \
-    "This `nn.Module` is intended for Apple Silicon deployment only. " \
-    "PyTorch-specific optimizations and training is disabled"
-
-class CrossAttention(nn.Module):
-    """ Apple Silicon friendly version of `diffusers.models.attention.CrossAttention`
-    """
-    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64):
-        super().__init__()
-        inner_dim = dim_head * heads
-        context_dim = context_dim if context_dim is not None else query_dim
-
-        self.scale = dim_head**-0.5
-        self.heads = heads
-        self.dim_head = dim_head
-
-        self.to_q = nn.Conv2d(query_dim, inner_dim, kernel_size=1, bias=False)
-        self.to_k = nn.Conv2d(context_dim, inner_dim, kernel_size=1, bias=False)
-        self.to_v = nn.Conv2d(context_dim, inner_dim, kernel_size=1,  bias=False)
-        self.to_out = nn.Sequential(
-            nn.Conv2d(inner_dim, query_dim, kernel_size=1, bias=True)
-        )
-
-    def forward(self, hidden_states, context=None, mask=None):
-        if self.training:
-            raise NotImplementedError(WARN_MSG)
-
-        batch_size, dim, _, sequence_length = hidden_states.shape
-
-        q = self.to_q(hidden_states)
-        context = context if context is not None else hidden_states
-        k = self.to_k(context)
-        v = self.to_v(context)
-
-        # Validate mask
-        if mask is not None:
-            expected_mask_shape = [batch_size, sequence_length, 1, 1]
-            if mask.dtype == torch.bool:
-                mask = mask.logical_not().float() * -1e4
-            elif mask.dtype == torch.int64:
-                mask = (1 - mask).float() * -1e4
-            elif mask.dtype != torch.float32:
-                raise TypeError(f"Unexpected dtype for mask: {mask.dtype}")
-
-            if len(mask.size()) == 2:
-                mask = mask.unsqueeze(2).unsqueeze(2)
-
-            if list(mask.size()) != expected_mask_shape:
-                raise RuntimeError(
-                    f"Invalid shape for `mask` (Expected {expected_mask_shape}, got {list(mask.size())}"
-                )
-
-        if ATTENTION_IMPLEMENTATION_IN_EFFECT == AttentionImplementations.ORIGINAL:
-            attn = attention.original(q, k, v, mask, self.heads, self.dim_head)
-
-        elif ATTENTION_IMPLEMENTATION_IN_EFFECT == AttentionImplementations.SPLIT_EINSUM:
-            attn = attention.split_einsum(q, k, v, mask, self.heads, self.dim_head)
-
-        elif ATTENTION_IMPLEMENTATION_IN_EFFECT == AttentionImplementations.SPLIT_EINSUM_V2:
-            attn = attention.split_einsum_v2(q, k, v, mask, self.heads, self.dim_head)
-        
-        else:
-            raise ValueError(ATTENTION_IMPLEMENTATION_IN_EFFECT)
-
-        return self.to_out(attn)
-
-
-def linear_to_conv2d_map(state_dict, prefix, local_metadata, strict,
-                         missing_keys, unexpected_keys, error_msgs):
+def linear_to_conv2d_map(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
     """ Unsqueeze twice to map nn.Linear weights to nn.Conv2d weights
     """
     for k in state_dict:
@@ -127,8 +42,7 @@ class LayerNormANE(LayerNormANE):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._register_load_state_dict_pre_hook(
-            correct_for_bias_scale_order_inversion)
+        self._register_load_state_dict_pre_hook(correct_for_bias_scale_order_inversion)
 
 
 # Reference: https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/unet_2d_condition.py
@@ -416,33 +330,43 @@ class ResnetBlock2D(nn.Module):
         if groups_out is None:
             groups_out = groups
 
-        self.norm1 = torch.nn.GroupNorm(num_groups=groups,
-                                        num_channels=in_channels,
-                                        eps=eps,
-                                        affine=True)
+        self.norm1 = torch.nn.GroupNorm(
+            num_groups=groups,
+            num_channels=in_channels,
+            eps=eps,
+            affine=True
+        )
 
-        self.conv1 = torch.nn.Conv2d(in_channels,
-                                     out_channels,
-                                     kernel_size=3,
-                                     stride=1,
-                                     padding=1)
+        self.conv1 = torch.nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            stride=1,
+            padding=1
+        )
 
         if temb_channels is not None:
-            self.time_emb_proj = torch.nn.Conv2d(temb_channels,
-                                                 out_channels,
-                                                 kernel_size=1)
+            self.time_emb_proj = torch.nn.Conv2d(
+                temb_channels,
+                out_channels,
+                kernel_size=1
+            )
         else:
             self.time_emb_proj = None
 
-        self.norm2 = torch.nn.GroupNorm(num_groups=groups_out,
-                                        num_channels=out_channels,
-                                        eps=eps,
-                                        affine=True)
-        self.conv2 = torch.nn.Conv2d(out_channels,
-                                     out_channels,
-                                     kernel_size=3,
-                                     stride=1,
-                                     padding=1)
+        self.norm2 = torch.nn.GroupNorm(
+            num_groups=groups_out,
+            num_channels=out_channels,
+            eps=eps,
+            affine=True
+        )
+        self.conv2 = torch.nn.Conv2d(
+            out_channels,
+            out_channels,
+            kernel_size=3,
+            stride=1,
+            padding=1
+        )
 
         self.nonlinearity = nn.SiLU()
 
@@ -450,11 +374,13 @@ class ResnetBlock2D(nn.Module):
 
         self.conv_shortcut = None
         if self.use_nin_shortcut:
-            self.conv_shortcut = torch.nn.Conv2d(in_channels,
-                                                 out_channels,
-                                                 kernel_size=1,
-                                                 stride=1,
-                                                 padding=0)
+            self.conv_shortcut = torch.nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size=1,
+                stride=1,
+                padding=0
+            )
 
     def forward(self, x, temb):
         hidden_states = x
@@ -514,16 +440,20 @@ class SpatialTransformer(nn.Module):
         self.d_head = d_head
         self.in_channels = in_channels
         inner_dim = n_heads * d_head
-        self.norm = torch.nn.GroupNorm(num_groups=32,
-                                       num_channels=in_channels,
-                                       eps=1e-6,
-                                       affine=True)
+        self.norm = torch.nn.GroupNorm(
+            num_groups=32,
+            num_channels=in_channels,
+            eps=1e-6,
+            affine=True
+        )
 
-        self.proj_in = nn.Conv2d(in_channels,
-                                 inner_dim,
-                                 kernel_size=1,
-                                 stride=1,
-                                 padding=0)
+        self.proj_in = nn.Conv2d(
+            in_channels,
+            inner_dim,
+            kernel_size=1,
+            stride=1,
+            padding=0
+        )
 
         self.transformer_blocks = nn.ModuleList([
             BasicTransformerBlock(
@@ -535,11 +465,13 @@ class SpatialTransformer(nn.Module):
             for d in range(depth)
         ])
 
-        self.proj_out = nn.Conv2d(inner_dim,
-                                  in_channels,
-                                  kernel_size=1,
-                                  stride=1,
-                                  padding=0)
+        self.proj_out = nn.Conv2d(
+            inner_dim,
+            in_channels,
+            kernel_size=1,
+            stride=1,
+            padding=0
+        )
 
     def forward(self, hidden_states, context=None):
         batch, channel, height, weight = hidden_states.shape
@@ -558,13 +490,13 @@ class BasicTransformerBlock(nn.Module):
 
     def __init__(self, dim, n_heads, d_head, context_dim=None, gated_ff=True):
         super().__init__()
-        self.attn1 = CrossAttention(
+        self.attn1 = Attention(
             query_dim=dim,
             heads=n_heads,
             dim_head=d_head,
         )
         self.ff = FeedForward(dim, glu=gated_ff)
-        self.attn2 = CrossAttention(
+        self.attn2 = Attention(
             query_dim=dim,
             context_dim=context_dim,
             heads=n_heads,
@@ -576,7 +508,7 @@ class BasicTransformerBlock(nn.Module):
 
     def forward(self, hidden_states, context=None):
         hidden_states = self.attn1(self.norm1(hidden_states)) + hidden_states
-        hidden_states = self.attn2(self.norm2(hidden_states), context=context) + hidden_states
+        hidden_states = self.attn2(self.norm2(hidden_states), encoder_hidden_states=context) + hidden_states
         hidden_states = self.ff(self.norm3(hidden_states)) + hidden_states
         return hidden_states
 
@@ -588,9 +520,11 @@ class FeedForward(nn.Module):
         inner_dim = int(dim * mult)
         self.net = nn.Sequential(
             GEGLU(dim_in=dim, dim_out=inner_dim), nn.Identity(),
-            nn.Conv2d(inner_dim,
-                      dim_out if dim_out is not None else dim,
-                      kernel_size=1))
+            nn.Conv2d(
+                inner_dim,
+                dim_out if dim_out is not None else dim,
+                kernel_size=1)
+            )
 
     def forward(self, hidden_states):
         return self.net(hidden_states)
@@ -616,9 +550,11 @@ class TimestepEmbedding(nn.Module):
         self.act = None
         if act_fn == "silu":
             self.act = nn.SiLU()
-        self.linear_2 = nn.Conv2d(time_embed_dim,
-                                  time_embed_dim,
-                                  kernel_size=1)
+        self.linear_2 = nn.Conv2d(
+            time_embed_dim,
+            time_embed_dim,
+            kernel_size=1
+        )
 
     def forward(self, sample):
         if len(sample.shape) == 2:
@@ -882,9 +818,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
         for i, up_block_type in enumerate(up_block_types):
             prev_output_channel = output_channel
             output_channel = reversed_block_out_channels[i]
-            input_channel = reversed_block_out_channels[min(
-                i + 1,
-                len(block_out_channels) - 1)]
+            input_channel = reversed_block_out_channels[min(i + 1, len(block_out_channels) - 1)]
 
             is_final_block = i == len(block_out_channels) - 1
 
@@ -906,15 +840,19 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin):
             prev_output_channel = output_channel
 
         # out
-        self.conv_norm_out = nn.GroupNorm(num_channels=block_out_channels[0],
-                                          num_groups=norm_num_groups,
-                                          eps=norm_eps)
+        self.conv_norm_out = nn.GroupNorm(
+            num_channels=block_out_channels[0],
+            num_groups=norm_num_groups,
+            eps=norm_eps
+        )
         self.conv_act = nn.SiLU()
         conv_out_padding = (conv_out_kernel - 1) // 2
-        self.conv_out = nn.Conv2d(block_out_channels[0],
-                                  out_channels,
-                                  kernel_size=conv_out_kernel,
-                                  padding=conv_out_padding)
+        self.conv_out = nn.Conv2d(
+            block_out_channels[0],
+            out_channels,
+            kernel_size=conv_out_kernel,
+            padding=conv_out_padding
+        )
 
     def forward(
         self,

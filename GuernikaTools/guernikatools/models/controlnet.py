@@ -3,10 +3,10 @@
 # Copyright (C) 2022 Apple Inc. All Rights Reserved.
 #
 
-from guernikatools import attention
-from guernikatools.layer_norm import LayerNormANE
-from guernikatools.unet import Timesteps, TimestepEmbedding, UNetMidBlock2DCrossAttn
-from guernikatools.unet import linear_to_conv2d_map, get_down_block, get_up_block
+from guernikatools.models import attention
+from .layer_norm import LayerNormANE
+from .unet import Timesteps, TimestepEmbedding, UNetMidBlock2DCrossAttn
+from .unet import linear_to_conv2d_map, get_down_block, get_up_block
 
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers import ModelMixin

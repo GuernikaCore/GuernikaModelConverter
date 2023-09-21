@@ -3,6 +3,8 @@
 # Copyright (C) 2022 Apple Inc. All Rights Reserved.
 #
 
+from guernikatools.utils import utils
+
 import argparse
 from collections import OrderedDict
 
@@ -62,7 +64,7 @@ def _verify_output_correctness_of_chunks(full_model, first_chunk_model,
 
     # Verify correctness across all outputs from second chunk and full model
     for out_name in outputs_from_full_model.keys():
-        torch2coreml.report_correctness(
+        utils.report_correctness(
             original_outputs=outputs_from_full_model[out_name],
             final_outputs=outputs_from_second_chunk_model[out_name],
             log_prefix=f"{out_name}")
@@ -123,12 +125,13 @@ def _get_first_chunk_outputs(block, op_idx):
     boundary_vars = set()
     for i in range(op_idx + 1):
         op = block.operations[i]
-        for var in op.outputs:
-            if var.val is None:  # only consider non const vars
-                for child_op in var.child_ops:
-                    child_op_idx = block.operations.index(child_op)
-                    if child_op_idx > op_idx:
-                        boundary_vars.add(var)
+        if not op.op_type.startswith("const"):
+            for var in op.outputs:
+                if var.val is None:  # only consider non const vars
+                    for child_op in var.child_ops:
+                        child_op_idx = block.operations.index(child_op)
+                        if child_op_idx > op_idx:
+                            boundary_vars.add(var)
     return list(boundary_vars)
 
 

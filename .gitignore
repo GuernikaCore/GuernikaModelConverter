@@ -51,8 +51,8 @@ fastlane/test_output
 iOSInjectionProject/
 .DS_Store
 
+__pycache__
 GenerateApp/build
-GuernikaTools/guernikatools/__pycache__
 GuernikaTools/build
 GuernikaTools/guernikatools.egg-info
 GuernikaModelConverter/GuernikaTools
